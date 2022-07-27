@@ -1,0 +1,25 @@
+- hosts: all
+  become: yes
+  tasks:
+   - name: update cache
+     command: apt update
+     ignore_errors: yes
+   - name: Install ntpdate package
+     apt:
+       name: ntpdate
+       state: present
+   - name: Install ntp package
+     apt:
+       name: ntp
+       state: present
+   - name: timedatectl ntp off
+     command: sudo timedatectl set-ntp off
+   - name: hosts update
+     shell:  echo  "\n\t10.10.44.35 ntp1" >> /etc/hosts
+   - name: time zone update
+     command: sudo timedatectl set-timezone Europe/Istanbul
+   - name: ntp.conf update
+     shell:  echo  "\n\tserver ntp1 prefer iburst" >> /etc/ntp.conf
+   - name: ntp restart
+     command: sudo systemctl restart ntp
+
