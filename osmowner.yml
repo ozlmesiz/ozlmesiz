@@ -1,0 +1,4 @@
+- hosts: all
+  tasks: 
+    - name: Execute the script
+      command: bash ./install_osm.sh -y

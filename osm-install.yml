@@ -1,0 +1,12 @@
+- hosts: all
+
+  tasks:
+
+    - name: OSM Install Auto file
+
+      shell: wget https://osm-download.etsi.org/ftp/osm-11.0-eleven/install_osm.sh
+
+    - name: Execute the script
+      command: chmod 777 install_osm.sh 
+
+

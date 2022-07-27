@@ -1,0 +1,111 @@
+- hosts: all
+  tasks:  
+  - name: Create a network with custom IPAM config
+    community.docker.docker_network:
+        name: prognet
+        driver_options:
+          com.docker.network.driver.mtu=1400
+        ipam_config:
+          - subnet: {IP}.0/16
+            gateway: {IP}.254
+            iprange: {IP}.0/16
+  - name: Docker pull an image and Docker run (CONTROLLLER)
+    community.docker.docker_container:
+        ports:
+         - "5005:5005"
+         - "5006:5006/udp"
+         - "5007:5007"
+         - "6633:6633"
+         - "6653:6653"
+         - "6640:6640"
+         - "8181:8181"
+         - "221:22"
+         - "9876:9876"
+         - "9898:9898" 
+        privileged: yes
+        restart: yes
+        networks:
+          - name: prognet
+            ipv4_address: "{IP}.30"
+        hostname: controller2
+        name: controller2
+        image: {IP}:{PORT}/milat/controller:maya-{RELEASE}
+        command: /root/Applications/script/start.sh
+
+
+
+  - name: Docker pull and Docker run (PROGNET-NM)
+    community.docker.docker_container:
+        ports:
+         - "7022:22"
+         - "1198:1098"
+         - "7007:5005"
+         - "7171:8181"
+         - "48443:8443"
+         - "9899:9899"
+        privileged: yes
+        restart: yes
+        networks:
+          - name: prognet
+            ipv4_address: "{IP}.20"
+        hostname: prognet-nm1
+        name: prognet-nm1
+        volumes:
+          - /etc/prognet-nm/static-files:/root/Applications/apache-karaf-4.2.6/static-files 
+        image: {IP}:{PORT}/milat/prognet-nm:maya-{RELEASE}
+        command: /root/Applications/script/start.sh
+ 
+
+
+  - name: Docker pull and Docker run (MİLAT-AYB)
+    community.docker.docker_container:
+        ports:
+         - "10010:10010"
+         - "4444:22"
+         - "49443:443"
+        privileged: yes
+        restart: yes
+        networks:
+          - name: prognet
+            ipv4_address: "{IP}.9"
+        hostname: milat-ayb
+        name: milat-ayb
+        image: {IP}:{PORT}/milat/milat-ayb:maya-{RELEASE}
+        command: /MILAT/base/web.sh
+         
+
+
+  - name: Docker pull and Docker run (RABBIT)
+    community.docker.docker_container:
+        ports:
+         - "4369:4369"
+         - "5671-5672:5671-5672"
+         - "15671-15672:15671-15672"
+         - "25672:25672"
+         - "4022:22"
+        privileged: yes
+        restart: yes
+        networks:
+          - name: prognet
+            ipv4_address: "{IP}.8"
+        hostname: rabbitmq
+        name: rabbitmq
+        image: {IP}:{PORT}/milat/rabbitmq:milat-3.8.5 
+        command: /usr/local/bin/rabbitmq-start.sh
+
+
+
+  - name: Docker pull and Docker run (POSTGRESQL)
+    community.docker.docker_container:
+        ports:
+         - "5432:5432"
+         - "5022:22"
+        privileged: yes
+        restart: yes
+        networks:
+          - name: prognet
+            ipv4_address: "{IP}.6"
+        hostname: postgresql
+        name: postgresql
+        image: {IP}:{PORT}/milat/postgresql:150
+        command: /sbin/entrypoint.sh
