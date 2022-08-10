@@ -1,0 +1,35 @@
+ apiVersion: apps/v1
+ kind: Deployment
+ metadata:
+   name: influxdb-deployment
+   namespace: monitoring
+ spec:
+   selector:
+     matchLabels:
+       app: influxdb
+   minReadySeconds: 15
+   replicas: 2
+   template:
+     metadata:
+       labels:
+         app: influxdb
+     spec:
+       containers:
+         - image: influxdb
+           name: influxdb
+           ports:
+             - containerPort: 8086
+           volumeMounts:
+             - mountPath: /var/lib/influxdb2
+               name: influxdb-data
+             - mountPath: /etc/influxdb/influxdb.conf
+               name: influxdb-config
+               subPath: influxdb.conf
+               readOnly: true
+       volumes:
+         - name: influxdb-data
+           persistentVolumeClaim:
+             claimName: influxdb-data
+         - name: influxdb-config
+           configMap:
+             name: influxdb-config

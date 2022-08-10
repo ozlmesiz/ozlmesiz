@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: persistent-volume
+  namespace: influxdb
+  labels: 
+    app: influxdb
+spec:
+  capacity:
+   storage: 10Gi
+  accessModes:
+   - ReadWriteOnce
+  hostPath:
+    path: "/data/db"
+  storageClassName: slow
