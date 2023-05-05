@@ -1,0 +1,199 @@
+// gitlabActionType NULL olması manuel olarak jenkins üzerinden build alındığı anlamına geliyor.
+@Library('5gcn_jenkins_library') _
+
+pipeline{
+    agent {
+        dockerfile {
+            label 'DockerAMF'
+            filename './NF_Dockerfiles/Dockerfile-amf'
+            additionalBuildArgs "--tag jenkins/amf"
+            args "-v /opt/cinar/packages:/opt/cinar/packages -v /Source:/Source -v /var/run/docker.sock:/var/run/docker.sock -v /home/jenkins/workspace:/home/jenkins/workspace --user root"
+        }
+    }
+
+    parameters {
+        string(name:'PACKAGE_VERSION', defaultValue:"MAJOR:1,PHASE_NUMBER:0,SPRINT_NUMBER:0,BUILD_NUMBER:${BUILD_NUMBER} " ,description:"Extra dist arguments")
+        string(name:'DEBIAN_REPOSITORY', defaultValue:"debrepo.ulakhaberlesme.com.tr", description:"Chart Museum URL")
+        string(name:'REPO_CREDENTIALS', defaultValue: "jenkins.service", description:"AMF  Repository Credentials ID")
+        string(name:'REPO_URL', defaultValue: "http://gitlab.ulakhaberlesme.com.tr/CIN/CINAR_AMF.git", description:"Main Repo URL")
+        string(name:'REPO_BRANCH', defaultValue: "development", description:"Main Repo Branch")
+    }
+
+    environment {
+        REPO_YAML_URL = 'http://gitlab.ulakhaberlesme.com.tr/CIN/YAML.git'
+        REPO_YAML_BRANCH = 'master'
+        DEBREPO_CREDENTIALS = credentials('debrepo_credentials')
+        JENKINS_CREDENTIALS = credentials('jenkins.service')
+        PKG_DIR = '/opt/cinar/packages/'
+        PKG_DEST = 'ubuntu@192.168.13.47:/home/ubuntu/docker/ulak-aptly/volume/incoming/xenial-unstable'
+        PASS = '724365'
+    }
+    stages{
+        stage("Environment Variables"){
+            steps {
+                sh "printenv"
+            }
+        }
+        stage("Clean Workspace"){
+            steps {
+                cleanWs()
+            }
+        }
+        stage('Cloning Repository'){
+            when {
+                expression {
+                    return (env.gitlabActionType == null || env.gitlabActionType == "PUSH")
+                }
+            }
+            steps{
+                script {
+                    updateGitlabCommitStatus name: 'repo clone', state: 'running'
+                    echo "========executing >> Cloning the AMF repository stage========"
+                    def branch = env.gitlabBranch == null ? env.REPO_BRANCH : env.gitlabBranch
+                    def gitUrl = env.gitlabSourceRepoHomepage == null ? env.REPO_URL : env.gitlabSourceRepoHomepage
+                    echo ">>> Using URL: ${gitUrl} ..."
+                    echo ">>> Using branch: ${branch} ..."
+                    git url: "${gitUrl}", credentialsId: "${REPO_CREDENTIALS}", branch: "${branch}"
+                }
+            }
+            post{
+                always{
+                    echo "========always for Clone Repository Stage========"
+                }
+                success{
+                    echo "========Clone Repository stage executed successfully========"
+                    updateGitlabCommitStatus name: 'repo clone', state: 'success'
+                }
+                failure{
+                    echo "========Clone Repository stage execution failed========"
+                    updateGitlabCommitStatus name: 'repo clone', state: 'failed'
+                }
+            }
+        }
+        stage("Build"){
+            steps{
+                script {
+                            sh '''#!/bin/bash
+                                export CINAR_BASE=/opt/cinar
+                                export CINAR_CODE_GENERATOR_DIR=$CINAR_BASE/bin/ccg
+                                export CINAR_YAML_DIR=${WORKSPACE}/YAML
+                                cp -R /opt/cinar/certificate ${WORKSPACE}
+                                if [[ $(echo $JOB_NAME | awk -F '/' '{print $1}') == "libcnrsmf-common" || $(echo $JOB_NAME | awk -F '/' '{print $1}') == "libcnramf-common" || $(echo $JOB_NAME | awk -F '/' '{print $1}') == "libcnrsmsf-common" ]]; then
+                                  echo "common build"
+                                elif [[ $(echo $JOB_NAME | awk -F '/' '{print \$1}' | sed s/"cnr"//) == "smf" ]]; then
+                                  sudo apt-get update
+                                  VERSION=`apt-cache show libcnrsmf-common | grep Version | cut -d' ' -f2 |  grep -v debug | head -1`
+                                  echo $VERSION
+                                  sudo apt-get install libcnrsmf-common=$VERSION
+                                elif [[ $(echo $JOB_NAME | awk -F '/' '{print \$1}' | sed s/"cnr"//) == "amf" ]]; then
+                                  sudo service rabbitmq-server start
+                                  sudo apt-get update
+                                  VERSION=`apt-cache show libcnramf-common | grep Version | cut -d' ' -f2 |  grep -v debug | head -1`
+                                  echo $VERSION
+                                  sudo apt-get install libcnramf-common=$VERSION
+                                elif [[ $(echo $JOB_NAME | awk -F '/' '{print \$1}' | sed s/"cnr"//) == "smsf" ]]; then
+                                  sudo service rabbitmq-server start
+                                  sudo apt-get update
+                                  VERSION=`apt-cache show libcnrsmsf-common | grep Version | cut -d' ' -f2 |  grep -v debug | head -1`
+                                  echo $VERSION
+                                  sudo apt-get install libcnrsmsf-common=$VERSION
+                                fi
+                                make dist_release
+                            '''
+                }
+            }
+            post{
+                always{
+                    echo "========always for Build Stage========"
+                }
+                success{
+                    echo "========Build stage executed successfully========"
+                    updateGitlabCommitStatus name: 'building', state: 'success'
+                }
+                failure{
+                    echo "========Build stage execution failed========"
+                    updateGitlabCommitStatus name: 'building', state: 'failed'
+                }
+            }
+        
+        } 
+         stage('Changelog') {
+            steps {
+                script {
+                    def previousTag = sh(returnStdout: true, script: 'git describe --abbrev=0 HEAD^').trim()
+                    def currentTag = sh(returnStdout: true, script: 'git describe --abbrev=0 HEAD').trim()
+                    def changelog = sh(returnStdout: true, script: "git log ${previousTag}..${currentTag} --pretty=format:'* %s (%h)' --reverse").trim()
+                    writeFile(file: 'changelog.txt', text: changelog)
+                }
+            }
+        }          
+        stage('Upload-Artifact') {
+            when {expression {return env.CHANGE_TARGET == null}}
+            steps {
+                script {
+                     sh 'rsync -avz --rsh="/usr/bin/sshpass -p "${PASS}" ssh -o StrictHostKeyChecking=no -l root" ${PKG_DIR}*.deb ${PKG_DEST}'
+                        }
+                        // Archive the build artifacts
+              archiveArtifacts artifacts: '/opt/cinar/packages/*.deb', onlyIfSuccessful: true
+      }
+        }
+
+            stage('Merge and Tag') {
+            stages {
+                stage('Merge-to-branch') {
+                    
+                    when {
+                        expression { return env.CHANGE_TARGET == null }
+                        branch 'developer*'
+                        not { environment name: 'TARGET_MAIN_BRANCH', value: '' }
+                    }
+                    environment {
+                        BUILD_NUMBER=sh(returnStdout: true, script:"""#!/bin/bash
+                        if [[ $BRANCH_NAME =~ ^developer* ]]; then BUILD_NUMBER=${BUILD_NUMBER}.debug && echo \"\$BUILD_NUMBER\"; 
+                        else BUILD_NUMBER=$BUILD_NUMBER && echo \"\$BUILD_NUMBER\" ; fi""").trim()
+                        VERSION=sh(returnStdout: true, script:"VERSION=${MAJOR}.${PHASE_NUMBER}.${SPRINT_NUMBER}.${env.BUILD_NUMBER} && echo \"\$VERSION\"").trim()
+                        NF_NAME=sh(returnStdout: true, script:"NF_NAME=\$(echo $JOB_NAME | awk -F '/' '{print \$1}') && echo \"\$NF_NAME\"").trim()
+                    }
+                    steps {
+                        script {
+                            sh """#!/bin/bash
+                            ls -ltr
+                            git config --global credential.helper store
+                            git config --global user.name "jenkins.servis"
+                            git push -f origin HEAD:${TARGET_MAIN_BRANCH}"""
+                        }
+                    }
+                }
+                stage('Tag-to-Commit') {
+
+                    when {
+                        expression { return env.CHANGE_TARGET == null }
+                    }
+                    environment {
+                        BUILD_NUMBER=sh(returnStdout: true, script:"""#!/bin/bash
+                        if [[ $BRANCH_NAME =~ ^developer* ]]; then BUILD_NUMBER=${BUILD_NUMBER}.debug && echo \"\$BUILD_NUMBER\"; 
+                        else BUILD_NUMBER=$BUILD_NUMBER && echo \"\$BUILD_NUMBER\" ; fi""").trim()
+                        VERSION=sh(returnStdout: true, script:"VERSION=${MAJOR}.${PHASE_NUMBER}.${SPRINT_NUMBER}.${env.BUILD_NUMBER} && echo \"\$VERSION\"").trim()
+                        NF_NAME=sh(returnStdout: true, script:"NF_NAME=\$(echo $JOB_NAME | awk -F '/' '{print \$1}') && echo \"\$NF_NAME\"").trim()
+                    }
+                    steps {
+                        script {
+                            sh """#!/bin/bash
+                                ls -ltr
+                                git config --global credential.helper store
+                                git config --global user.name "jenkins.servis"
+                                git tag -a "${env.NF_NAME}-${env.VERSION}" -m "${env.NF_NAME} new version is ${env.VERSION}"
+                                git push -f origin "${env.NF_NAME}-${env.VERSION}"
+                            """
+                        }
+                    }
+                }
+            }
+             post {
+                always {
+                    deleteDir()
+                }
+            }           
+        }
+    }
+}

@@ -1,0 +1,40 @@
+#########example file:
+
+[vtoAMF1]
+10.10.21.17 ansible_ssh_user=<USER> ansible_ssh_pass=<PASS>
+
+[vtoAMF2]
+10.10.21.156 ansible_ssh_user=<USER> ansible_ssh_pass=<PASS>
+
+[stoPCF1]
+10.10.31.120 ansible_ssh_user=<USER> ansible_ssh_pass=<PASS>
+
+[stoPCF2]
+10.10.31.126 ansible_ssh_user=<USER> ansible_ssh_pass=<PASS>
+
+[ptoPCF]
+10.10.44.68 ansible_ssh_user=<USER> ansible_ssh_pass=<PASS>
+
+[ptoUDR]
+10.10.44.121 ansible_ssh_user=<USER> ansible_ssh_pass=<PASS>
+
+[vto:children]
+vtoAMF1
+vtoAMF2
+
+[sto:children]
+stoPCF1
+stoPCF2
+
+[envovergw:children]
+sto
+
+[pto:children]
+ptoPCF
+ptoUDR
+
+[envovergw_pto:children]
+pto
+
+
+

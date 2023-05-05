@@ -1,0 +1,54 @@
+pipeline {
+    agent {
+        dockerfile {
+            label 'DockerUPF'
+            filename './NF_Dockerfiles/Dockerfile-upf'
+            additionalBuildArgs "--tag jenkins/upf"
+            args "-v /opt/cinar/packages:/opt/cinar/packages -v /Source:/Source -v /var/run/docker.sock:/var/run/docker.sock -v /home/jenkins/workspace:/home/jenkins/workspace --user root"
+        }
+    }
+    parameters {
+        string(name: 'COMMIT_ID', description: 'Enter the commit ID to build', defaultValue: '', trim: true)
+        string(name:'DEBIAN_REPOSITORY', defaultValue:"debrepo.ulakhaberlesme.com.tr", description:"Chart Museum URL")
+        string(name:'GITLAB_CREDENTIALS_ID', defaultValue: "jenkins.service", description:"UPF  Repository Credentials ID")
+        string(name:'GITLAB_REPOSITORY_URL', defaultValue: "http://gitlab.ulakhaberlesme.com.tr/CIN/CINAR_UPF.git", description:"Main Repo URL")
+        string(name:'REPO_BRANCH', defaultValue: "development", description:"Main Repo Branch")
+    }
+
+    environment {
+        REPO_YAML_BRANCH = 'master'
+    }
+    
+    stages {
+        stage('Clone repository') {
+            steps {
+                checkout([$class: 'GitSCM', 
+                          branches: [[name: '*/master']], 
+                          doGenerateSubmoduleConfigurations: false, 
+                          extensions: [], 
+                          submoduleCfg: [], 
+                          userRemoteConfigs: [[credentialsId: params.GITLAB_CREDENTIALS_ID, url: params.GITLAB_REPOSITORY_URL]]])
+                sh "git checkout ${params.COMMIT_ID}"
+            }
+        }
+        stage('Build') {
+            steps {
+                echo "Starting build for commit ID: ${params.COMMIT_ID}"
+                            echo "${env.Setups}"   
+                            echo "${JOB_NAME}"
+                            echo "${env.Targets}"
+                            sh """#!/bin/bash
+                                export CINAR_BASE=/opt/cinar
+                                cp -R /opt/cinar/certificate ${WORKSPACE}
+                                sed -i '3 s/.*/url = http://gitlab.ulakhaberlesme.com.tr/CIN/CINAR_UPF_DPDK.git/' .gitmodules
+                                make dist
+                                cp /home/jenkins/workspace/cnrupf_developer/dist/*.deb /opt/cinar/packages
+                            """
+                            sh """#!/bin/bash
+                                sudo rsync -avz --rsh="/usr/bin/sshpass -p "724365" ssh -o StrictHostKeyChecking=no -l root" /opt/cinar/packages/ ubuntu@192.168.13.47:/home/ubuntu/docker/ulak-aptly/volume/incoming/xenial-unstable
+                            """
+                
+            }
+        }
+    }
+}

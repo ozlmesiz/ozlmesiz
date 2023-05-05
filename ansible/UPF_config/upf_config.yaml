@@ -1,0 +1,195 @@
+#Bu playbook UPF'ın VM'e kurulumunu ve konfigurasyonunu otomatize edebilmek amacıyla gelistirilmistir.
+#playbook'un calistirildigi yerde ansible kurulu olmalidir. (ansible 2.10.8 veya daha üst) (192.168.13.156 makinesi kullanılabilir. /home/jenkins/ansible_betul dizini altında playbook mevcut)
+#Playbook calistirilmadan once kurulum yapılacak ortamın (VTO STO PTO hangisi ise) public,data,control IP block'lari bilinmelidir.
+#kurulum yapılacak olan makinede 2 adet control interface'i olmalıdır.
+#kurulması istenen UPF versiyonu bilinmelidir.
+#ortamdaki nrf IP ve dnn adreside bilinmelidir.
+#playbook calistirilirken kurulum yapılacak upf makine ip'si "-i" parametresinin yanına yazılır.
+#ornek komut
+#ansible-playbook -i 10.10.21.30, upf_config.yaml -u cnrusr --ask-pass -e "public_ip_block=10.10.20 data_ip_block=10.10.22 control_ip_block=10.10.23 version=1.0.0.346 nrf_ip=10.10.48.55 dnn_adress=dnn.test1.com"
+#Betul Aslan
+- hosts: all
+  become: yes
+  tasks:
+   - name: Remove file
+     ansible.builtin.file:
+       path: /etc/apt/sources.list.d/cinar.list
+       state: absent
+   - name: Added repo adress
+     lineinfile:
+       dest: /etc/apt/sources.list.d/cinar.list
+       line: "{{ item }}"
+       create: yes
+     with_items:
+       - deb [trusted=yes] http://192.168.13.173:8080/repos/thirdparty/ amd64/
+       - deb [trusted=yes] http://192.168.13.173:8080/repos/cinar/ amd64/
+       - deb [trusted=yes] http://192.168.13.173:8080/repos/interworking/ amd64/
+       - deb [trusted=yes] http://192.168.13.173:8080/repos/latest/ amd64/
+   - name: update cache
+     command: apt update
+     ignore_errors: yes
+   - name: Check if dpdk package is installed or not
+     command: dpkg-query -l dpdk
+     register: debian_package_check
+   - name: Install dpdk package if not present
+     apt:
+       name: dpdk=2.2.0-0ubuntu8
+       state: present
+     when: debian_package_check is failed
+   - name: Install upf package
+     apt:
+       name: cnrupf={{ version }}
+       state: present
+   - name: find public interface
+     ansible.builtin.shell: ip address | grep {{ public_ip_block }} | awk '{print $7}'
+     register: public_interface
+   - name: find data interface
+     ansible.builtin.shell: ip address | grep {{ data_ip_block }} | awk '{print $7}'
+     register: data_interface
+   - name: find control interface
+     ansible.builtin.shell: ip address | grep {{ control_ip_block }} | awk '{print $7}'
+     register: control_interface
+  
+   - debug: var=public_interface.stdout_lines[0]
+   - debug: var=data_interface.stdout_lines[0]
+   - debug: var=control_interface.stdout_lines[0]
+   - name: second control_interface name
+     debug: var=control_interface.stdout_lines[1]
+     when: control_interface.stdout_lines[1] is defined
+
+   - name: find dpdk bind public ip
+     ansible.builtin.shell: ip address | grep {{ public_ip_block }} | awk '{print $2}' | awk -F'/' '{print $1}'
+     register: public_ip
+   - name: find dpdk bind data ip
+     ansible.builtin.shell: ip address | grep {{ data_ip_block }} |  awk '{print $2}' | awk -F'/' '{print $1}'
+     register: data_ip
+   - name: find dpdk bind control ip
+     ansible.builtin.shell: ip address | grep {{ control_ip_block }} |  awk '{print $2}' | awk -F'/' '{print $1}'
+     register: control_ip
+
+   - name: find pci bus id for public interface
+     ansible.builtin.shell: lshw -businfo | grep {{ item }} | awk '{print $1}' | awk -F@ '{print $2}'
+     register: public_pci_bus_id
+     with_items:
+       - "{{ public_interface.stdout_lines[0] }}"
+   
+   - name: find pci bus id for data interface
+     ansible.builtin.shell: lshw -businfo | grep {{ item }} | awk '{print $1}' | awk -F@ '{print $2}'
+     register: data_pci_bus_id
+     with_items:
+       - "{{ data_interface.stdout_lines[0] }}"
+
+   - name: find pci bus id for control interface
+     ansible.builtin.shell: lshw -businfo | grep {{ item }} | awk '{print $1}' | awk -F@ '{print $2}'
+     register: control_pci_bus_id
+     with_items:
+       - "{{ control_interface.stdout_lines[1] }}"
+     when: control_interface.stdout_lines[1] is defined
+   
+   - name: list interface for sort
+     ansible.builtin.lineinfile:
+       path: /tmp/interface_list
+       line: "{{ item.int }}"
+       create: yes
+     with_items:
+       - { int: "{{ public_interface.stdout_lines[0] }}" }
+       - { int: "{{ data_interface.stdout_lines[0] }}" }
+       - { int: "{{ control_interface.stdout_lines[1] }}" }
+   
+   - name: Sort interface
+     ansible.builtin.shell: sort /tmp/interface_list
+     register: port_num
+   - debug: var=port_num.stdout_lines[0]
+   - debug: var=port_num.stdout_lines[1]
+   - debug: var=port_num.stdout_lines[2]
+       
+   - name: set public port number
+     set_fact:
+       port_public : "{{ item.src }}"
+     when: "item.when"
+     with_items: 
+      - { src: 0, when: "{{ port_num.stdout_lines[0] == public_interface.stdout_lines[0] }}" }
+      - { src: 1, when: "{{ port_num.stdout_lines[1] == public_interface.stdout_lines[0] }}" }
+      - { src: 2, when: "{{ port_num.stdout_lines[2] == public_interface.stdout_lines[0] }}" }
+
+   - debug: 
+       msg: "public port '{{ port_public }}'"
+   
+   - name: set data port number
+     set_fact:
+       port_data : "{{ item.src }}"
+     when: "item.when"
+     with_items:
+      - { src: 0, when: "{{ port_num.stdout_lines[0] == data_interface.stdout_lines[0] }}" }
+      - { src: 1, when: "{{ port_num.stdout_lines[1] == data_interface.stdout_lines[0] }}" }
+      - { src: 2, when: "{{ port_num.stdout_lines[2] == data_interface.stdout_lines[0] }}" }
+
+   - debug:
+       msg: "data port '{{ port_data }}'"
+   
+   - name: set control port number
+     set_fact:
+       port_control : "{{ item.src }}"
+     when: "item.when"
+     with_items:
+      - { src: 0, when: "{{ port_num.stdout_lines[0] == control_interface.stdout_lines[1] }}" }
+      - { src: 1, when: "{{ port_num.stdout_lines[1] == control_interface.stdout_lines[1] }}" }
+      - { src: 2, when: "{{ port_num.stdout_lines[2] == control_interface.stdout_lines[1] }}" }
+
+   - debug:
+       msg: "control port '{{ port_control }}'"
+  
+   - name: write to public_pci_bus_id to dpdk interface file
+     ansible.builtin.lineinfile:
+       path: /etc/dpdk/interfaces
+       line: pci     {{ item.stdout }}    igb_uio
+     with_items:
+       - "{{ public_pci_bus_id.results }}"
+   
+   - name: write to data_pci_bus_id to dpdk interface file
+     ansible.builtin.lineinfile:
+       path: /etc/dpdk/interfaces
+       line: pci     {{ item.stdout }}    igb_uio
+     with_items:
+       - "{{ data_pci_bus_id.results }}"
+
+   - name: write to control_pci_bus_id to dpdk interface file
+     ansible.builtin.lineinfile:
+       path: /etc/dpdk/interfaces
+       line: pci     {{ item.stdout }}    igb_uio
+     with_items:
+       - "{{ control_pci_bus_id.results }}"
+     when: control_interface.stdout_lines[1] is defined
+
+   - name: Restart service dpdk
+     ansible.builtin.service:
+       name: dpdk
+       state: restarted
+  
+   - name: change to upf config file
+     ansible.builtin.lineinfile:
+       path: /opt/cinar/upf/etc/cnrupf.conf
+       regexp: "{{ item.old }}"
+       line: "{{ item.new }}"
+       owner: cnrusr
+       group: cnrusr
+       mode: '0644'
+     with_items:
+       - { old: "\"log.level\":\ \"INFO\"", new: "       \"log.level\":\ \"DEBUG\"" } 
+       - { old: "\"nrf.ipv4\":\ \"127.0.0.1\"", new: "        \"nrf.ipv4\":\ \"{{ nrf_ip }}\"" }
+       - { old: "\"dnn\":\ \"internet\"", new: "                            \"dnn\":\ \"{{ dnn_adress }}\"" }
+       - { old: "\"n3.up.interface.ipv4\":\ \"127.0.0.1\",", new: "        \"n3.up.interface.ipv4\":\ \"{{ public_ip.stdout_lines[0] }}\"," }
+       - { old: "\"n3.up.interface.ipv4.gw\":\ \"127.0.0.1\",", new: "        \"n3.up.interface.ipv4.gw\":\ \"{{ public_ip_block }}.1\"," } 
+       - { old: "\"n3.up.interface.ports\":\ \"0\",", new: "        \"n3.up.interface.ports\":\ \"{{ port_public }}\"," }
+       - { old: "\"n4.cp.interface.ipv4\":\ \"127.0.0.1\",", new: "        \"n4.cp.interface.ipv4\":\ \"{{ control_ip.stdout_lines[0] }}\"," } 
+       - { old: "\"n4.up.interface.ipv4\":\ \"127.0.0.1\",", new: "        \"n4.up.interface.ipv4\":\ \"{{ control_ip.stdout_lines[1] }}\"," }
+       - { old: "\"n4.up.interface.ipv4.gw\":\ \"127.0.0.1\",", new: "        \"n4.up.interface.ipv4.gw\":\ \"{{ control_ip_block }}.1\"," }
+       - { old: "\"n4.up.interface.ports\":\ \"\",", new: "        \"n4.up.interface.ports\":\ \"{{ port_control }}\"," }
+       - { old: "\"n6.up.interface.ipv4\":\ \"127.0.0.1\",", new: "        \"n6.up.interface.ipv4\":\ \"{{ data_ip.stdout_lines[0] }}\"," }
+       - { old: "\"n6.up.interface.ipv4.gw\":\ \"127.0.0.1\",", new: "        \"n6.up.interface.ipv4.gw\":\ \"{{ data_ip_block }}.1\"," }
+       - { old: "\"n6.up.interface.ports\":\ \"1\"" , new: "        \"n6.up.interface.ports\":\ \"{{ port_data }}\"" }
+
+   - name: Restart service cnrupf
+     ansible.builtin.service:
+       name: cnrupf
+       state: restarted

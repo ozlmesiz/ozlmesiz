@@ -1,0 +1,193 @@
+#!/usr/bin/env groovy
+
+pipeline {
+    agent none
+    parameters {
+        string(name: 'TARGET_MAIN_BRANCH', defaultValue: '', description: 'if you want to merge, please select merge branch (like master, otherwise keep to empty)')
+        string(name: 'VERSION_ULAK', defaultValue: '1', description: 'Please write to VERSION_ULAK')
+        string(name: 'MINOR_VERSION_ULAK', defaultValue: '2', description: 'Please write to MINOR_VERSION_ULAK')
+        string(name: 'PATCH_LEVEL_VERSION_ULAK', defaultValue: '7', description: 'Please write to PATCH_LEVEL_VERSION_ULAK')
+        choice(name: 'Setups', choices: ['Not Installation', 'Installation'], description: 'if you want to run Continous-Deployment stage, please select "Installation"')
+    }
+    options {
+        buildDiscarder logRotator(
+            daysToKeepStr: '5',
+            numToKeepStr: '5'
+            )
+    }
+    stages {
+        stage('Continous-Integration-Testing') {
+            agent {
+                node {
+                  label "Docker_OpenEPC"
+                  customWorkspace "${env.JOB_NAME}"
+                }
+            }
+            stages {
+                stage('Main-Build') {
+
+                    //when {expression {return env.CHANGE_TARGET == null}}
+
+                    steps {
+                        script {
+                           dir('wharf'){
+                            checkout(
+                              [
+                                $class: 'GitSCM', 
+                                branches: [
+                                  [
+                                    name: '*/developer'
+                                  ]
+                                ], 
+                                doGenerateSubmoduleConfigurations: false, 
+                                extensions: [
+                                  [
+                                    $class: 'SubmoduleOption', 
+                                    disableSubmodules: false, 
+                                    parentCredentials: true, 
+                                    recursiveSubmodules: true, 
+                                    reference: '', 
+                                    trackingSubmodules: false
+                                  ]
+                                ], 
+                                submoduleCfg: [], 
+                                userRemoteConfigs: [
+                                  [
+                                    credentialsId: 'd0d6728d-c821-4ad6-a654-6cb0e6a4de3f', 
+                                    url: 'https://bitbucket.ulakhaberlesme.com.tr:8443/scm/op/ulak-wharf.git'
+                                  ]
+                                ]
+                              ]
+                            )
+                           }
+                            
+                            dir('gui'){
+                            checkout(
+                              [
+                                $class: 'GitSCM', 
+                                branches: [
+                                  [
+                                    name: '*/developer'
+                                  ]
+                                ], 
+                                doGenerateSubmoduleConfigurations: false, 
+                                extensions: [
+                                  [
+                                    $class: 'SubmoduleOption', 
+                                    disableSubmodules: false, 
+                                    parentCredentials: true, 
+                                    recursiveSubmodules: true, 
+                                    reference: '', 
+                                    trackingSubmodules: false
+                                  ]
+                                ], 
+                                submoduleCfg: [], 
+                                userRemoteConfigs: [
+                                  [
+                                    credentialsId: 'd0d6728d-c821-4ad6-a654-6cb0e6a4de3f', 
+                                    url: 'https://bitbucket.ulakhaberlesme.com.tr:8443/scm/op/openepc-gui.git'
+                                  ]
+                                ]
+                              ]
+                            )
+                            }
+                            echo "${JOB_NAME}"
+                            sh '''#!/bin/bash
+                                   sudo su
+                                   sudo rm -r /opt/OpenEPC
+                                   sudo cp -R /home/jenkins/${JOB_NAME} /opt/OpenEPC
+                                   sudo /opt/OpenEPC/install/install_prereqs.sh wharf db web_gui
+                                   cd /opt/OpenEPC/wharf/
+                                   sudo apt-get install -y parallel
+                                   ncpu=`nproc`
+                                   echo ${ncpu}
+                                   if [ -z "$ncpu" ] ; then
+                                     ncpu="1"
+                                   fi
+                                   sudo make wharf  -j4
+                                   sudo ls modules | sudo parallel --progress -j4 ./make_module.sh modules :::
+                                   sudo /opt/OpenEPC/install/install_prereqs.sh -rm
+                                   cd /opt/packages
+                                   sudo tar -cvzf OpenEPC-${BUILD_NUMBER}.tar /opt/OpenEPC
+
+                            '''
+                        }
+                    }
+                }
+
+            }
+            post {
+                always {
+                    deleteDir()
+                }
+            }
+        }
+        stage('Upload-Artifact') {
+            when {expression {return env.CHANGE_TARGET == null}}
+            steps {
+                script {
+                    sh """#!/bin/bash
+                        rsync -avz --rsh="/usr/bin/sshpass -p "724365" ssh -o StrictHostKeyChecking=no -l root" /opt/packages/*.gz ubuntu@192.168.13.47:/debrepo/OpenEPC/testing
+                    """
+                }
+            }
+        }
+        stage('SendNotification') {
+            agent {
+                node {
+                    label 'Docker_OpenEPC'
+                }
+            }
+            stages{
+                stage('PR') {
+                    when {expression {return env.CHANGE_TARGET != null}}
+                        steps {
+                            script {
+                                emailext(
+                                    body: """Jenkins Build ${currentBuild.currentResult}: Job ${env.JOB_NAME},
+                                    At: ${env.BUILD_URL}""",
+                                    recipientProviders: [requestor(), culprits()],
+                                    subject: "Jenkins Build ${currentBuild.currentResult}: Job ${env.JOB_NAME}."
+                                )
+                            }
+                        }
+                }
+                stage('Daily') {
+                    environment {
+                    RECIPIENT=[
+                            "yasin.caner@ulakhaberlesme.com.tr"
+                        ].join(",");
+                    }
+                    when {expression {return env.CHANGE_TARGET == null}}
+
+                    steps {
+                        sh """#!/bin/bash
+                            git init
+                            echo "<html>" >> commitmessage.html
+                            echo "<header><title> This is the title</title></header>" >> commitmessage.html
+                            echo "<body> Job ${env.JOB_NAME} build ${env.BUILD_NUMBER}\n More info at: ${env.BUILD_URL} </body>" >> commitmessage.html
+                            echo "<body> Commit Autor and Commit Messages </body>" >> commitmessage.html
+                            echo "<body> `git log --format=%B -n 1 \$(git log -1 --pretty=format:"%h") | cat -` </body>" >> commitmessage.html
+                            echo "</html>" >> commitmessage.html
+                            """
+                        script {
+                            def mailRecipients = "${env.RECIPIENT}"
+                            def jobName = currentBuild.fullDisplayName
+                            emailext body: '''${FILE, path="commitmessage.html"}''',
+                                mimeType: 'text/html',
+                                subject: "Jenkins Build ${currentBuild.currentResult}: Job ${env.JOB_NAME}",
+                                to: "${mailRecipients}",
+                                replyTo: "${mailRecipients}",
+                                recipientProviders: [[$class: 'CulpritsRecipientProvider']]
+                        }
+                    }
+                } 
+            }
+            post {
+                always {
+                  deleteDir()
+                }
+            }
+        }
+    }
+}

@@ -1,0 +1,124 @@
+FROM ubuntu:xenial AS ubuntu-ortak
+USER root
+WORKDIR /root
+RUN echo "192.168.13.47 debrepo-cinar.ulakhaberlesme.com.tr" >> /etc/hosts
+RUN echo "192.168.13.47 debrepo.ulakhaberlesme.com.tr" >> /etc/hosts
+RUN echo "deb [trusted=yes] http://debrepo-cinar.ulakhaberlesme.com.tr/repos/xenial/cinar/ amd64/" >> /etc/apt/sources.list.d/cinar.list
+RUN echo "deb [trusted=yes] http://debrepo-cinar.ulakhaberlesme.com.tr/repos/xenial/new_interworking/ amd64/" >> /etc/apt/sources.list.d/cinar.list
+RUN echo "deb [trusted=yes] http://debrepo-cinar.ulakhaberlesme.com.tr/repos/xenial/MC/ amd64/" >> /etc/apt/sources.list.d/cinar.list
+RUN echo "deb [trusted=yes] http://debrepo-cinar.ulakhaberlesme.com.tr/repos/xenial/thirdparty/ amd64/" >> /etc/apt/sources.list.d/cinar.list
+RUN echo "deb [trusted=yes] http://debrepo-cinar.ulakhaberlesme.com.tr/repos/xenial/interworking/ amd64/" >> /etc/apt/sources.list.d/cinar.list
+RUN echo "deb [trusted=yes] http://debrepo.ulakhaberlesme.com.tr/ubuntu/ xenial oldstable" >> /etc/apt/sources.list.d/cinar.list
+
+RUN apt-get update && apt-get upgrade
+RUN apt-get install -y certificate \
+                    cinarloggersink \
+                    cpp-jwt \
+                    dkms \
+                    dpdk \
+                    libevent \
+                    libicu55 \
+                    libnghttp2-asio \
+                    libprometheuscpp \
+                    mongo-c-driver \
+                    mongo-cxx-driver \
+                    nlohmann-json \
+                    python \
+                    nano \
+                    curl \
+                    wget \
+                    net-tools \
+                    netcat \
+                    iputils-ping \
+                    g3log \
+                    libpq5 \
+                    sudo \
+                    libreadline-dev \
+                    libibverbs-dev \
+                    libmlx5-dev \
+                    libxerces-c-dev \
+                    lix2x3asnpackage \
+                    nettle-dev
+RUN apt-get install -y \
+    apt-transport-https \
+    ca-certificates \
+    curl \
+    gnupg-agent \
+    software-properties-common
+RUN curl -fsSL https://download.docker.com/linux/ubuntu/gpg |apt-key add -
+RUN apt-key fingerprint 0EBFCD88
+RUN add-apt-repository \
+   "deb [arch=amd64] https://download.docker.com/linux/ubuntu \
+   $(lsb_release -cs) \
+   stable"
+RUN apt-get update
+RUN apt-get install docker-ce docker-ce-cli containerd.io -y
+FROM ubuntu-ortak AS ubuntu-dev
+RUN apt install -y zip \
+                    unzip \
+                    g++ \
+                    make \
+                    checkinstall \
+                    gdb \
+                    gdbserver \
+                    default-jre \
+                    doxygen \
+                    gcovr \
+                    cppcheck \
+                    graphviz \
+                    libpqxx-dev \
+                    libsctp-dev \
+                    libncurses5-dev \
+                    libxml2-dev \
+                    uuid-dev \
+                    librabbitmq-dev \
+                    rabbitmq-server \
+                    libgnutls-dev \
+                    libgcrypt-dev \
+                    libidn11-dev \
+                    libsctp-dev \
+                    boost-all-dev \
+                    cinarcodegenerator \
+                    cpp-jwt \
+                    googletest \
+                    rsync \
+                    sshpass \
+                    git \
+                    lix1package 
+                    
+ RUN apt install -y cinarcryptolib \
+                    cinarasn1clib=1.0.4 \
+                    bsdmainutils \
+                    linux-headers-4.15.0-142-generic\
+                    libhiredis-dev \
+                    libnuma-dev:amd64
+FROM ubuntu-dev AS nfbuild
+RUN apt update && \
+    apt install -y cinarframework.dbg \
+                cinarnnrfaccesstoken.15.201906-Interworking.dbg \
+                cinarnnrfnfdiscovery.15.201906-Interworking.dbg \
+                cinarnnrfnfmanagement.15.201906-Interworking.dbg \
+                cinarnamfeventexposure.15.201906-Interworking.dbg \
+                cinarnudmsdm.15.201906-Interworking.dbg \
+                cinarnudmee.15.201906-Interworking.dbg \
+                cinarnudmuecm.15.201906-Interworking.dbg \
+                cinarnsmfpdusession.15.201906-Interworking.dbg \
+                cinarnamfcommunication.15.201906-Interworking.dbg \
+                cinarnsmfeventexposure.15.201906-Interworking.dbg \
+                cinarnpcfsmpolicycontrol.15.201906-Interworking.dbg \
+                cinarnnefpfdmanagement.15.201906-Interworking.dbg \
+                cinarnsmsfsmservice.15.201906-interworking.dbg \
+                cinarnamflocation.15.201906-interworking.dbg \
+                cinarnamfmt.15.201906-interworking.dbg \
+                cinarnchfconvergedcharging.15.201906-Interworking.dbg \
+                cinarnpcfampolicycontrol.15.201906-interworking.dbg \
+                cinarnausfueauthentication.15.201906-interworking.dbg \
+                cinarnnssfnsselection.15.201906-interworking.dbg \
+                cinarnnssfnssaiavailability.15.201906-interworking.dbg && \
+    echo "/opt/cinar/lib" > /etc/ld.so.conf.d/cinar.conf && /sbin/ldconfig && \
+    echo "192.168.57.53 gitlab.ulakhaberlesme.com.tr" >> /etc/hosts && \
+    echo "192.168.13.47 debrepo.ulakhaberlesme.com.tr" >> /etc/hosts && \
+    echo "192.168.10.14 bitbucket.ulakhaberlesme.com.tr" >> /etc/hosts && \
+    mkdir /opt/cinar/packages
+
+VOLUME /var/run/docker.sock:/var/run/docker.sock

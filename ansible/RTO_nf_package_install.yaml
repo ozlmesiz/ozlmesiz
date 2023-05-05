@@ -1,0 +1,128 @@
+- hosts: all
+  become: yes
+  ##gather_facts: false
+  tasks:
+   - name: clean cache
+     command: apt clean
+   - name: update cache
+     command: apt update
+     ignore_errors: yes 
+   - name: pcf packages install to pcf nodes
+     apt:
+      name: "{{ item }}"
+      allow_unauthenticated: yes
+      force: yes
+     when: 
+       - inventory_hostname in groups['pcf'] 
+       - item is search("pcf")
+     with_lines: cat ./{{ package_list_file }}
+     ignore_errors: yes 
+   
+   - name: smf package install to smf nodes
+     apt:
+      name: "{{ item }}"
+      allow_unauthenticated: yes
+      force: yes
+     when:
+       - inventory_hostname in groups['smf']
+       - item is search("smf")
+     with_lines: cat ./{{ package_list_file }}
+     ignore_errors: yes 
+
+   - name: smsf package install to smsf nodes
+     apt:
+      name: "{{ item }}"
+      allow_unauthenticated: yes
+      force: yes
+     when:
+      - inventory_hostname in groups['smsf']
+      - item is search("smsf")
+     with_lines: cat ./{{ package_list_file }}
+     ignore_errors: yes 
+
+   - name: nrf package install to nrf nodes
+     apt:
+      name: "{{ item }}"
+      allow_unauthenticated: yes
+      force: yes
+     when:
+       - inventory_hostname in groups['nrf']
+       - item is search("nrf")
+     with_lines: cat ./{{ package_list_file }}
+     ignore_errors: yes 
+
+   - name: nef package install to nef nodes
+     apt:
+      name: "{{ item }}"
+      allow_unauthenticated: yes
+      force: yes
+     when:
+       - inventory_hostname in groups['nef']
+       - item is search("nef")
+     with_lines: cat ./{{ package_list_file }}
+     ignore_errors: yes 
+
+   - name: nssf package install to nssf nodes
+     apt:
+      name: "{{ item }}"
+      allow_unauthenticated: yes
+      force: yes
+     when:
+       - inventory_hostname in groups['nssf']
+       - item is search("nssf")
+     with_lines: cat ./{{ package_list_file }}
+     ignore_errors: yes 
+
+   - name: amf package install to amf nodes
+     apt:
+      name: "{{ item }}"
+      allow_unauthenticated: yes
+      force: yes
+     when:
+       - inventory_hostname in groups['amf']
+       - item is search("amf")
+     with_lines: cat ./{{ package_list_file }}
+     ignore_errors: yes 
+
+   - name: upf package install to upf nodes
+     apt:
+      name: "{{ item }}"
+      allow_unauthenticated: yes
+      force: yes
+     when:
+       - inventory_hostname in groups['upf']
+       - item is search("upf")
+     with_lines: cat ./{{ package_list_file }}
+     ignore_errors: yes 
+
+   - name: udm package install to udm nodes
+     apt:
+      name: "{{ item }}"
+      allow_unauthenticated: yes
+      force: yes
+     when:
+       - inventory_hostname in groups['udm']
+       - item is search("libcnr5gmessages") or item is search("libcnrcommon") or item is search("libcnrhttp1") or item is search("libcnrhttp2") or item is search("udm")
+     with_lines: cat ./{{ package_list_file }}
+     ignore_errors: yes 
+
+   - name: udr package install to udr nodes
+     apt:
+      name: "{{ item }}"
+      allow_unauthenticated: yes
+      force: yes
+     when:
+       - inventory_hostname in groups['udr']
+       - item is search("libcnr5gmessages") or item is search("libcnrcommon") or item is search("libcnrhttp1") or item is search("libcnrhttp2") or item is search("udr")
+     with_lines: cat ./{{ package_list_file }}
+     ignore_errors: yes 
+   - name: ausf package install to ausf nodes
+     apt:
+      name: "{{ item }}"
+      allow_unauthenticated: yes
+      force: yes
+     when:
+       - inventory_hostname in groups['ausf']
+       - item is search("libcnr5gmessages") or item is search("libcnrcommon") or item is search("libcnrhttp1") or item is search("libcnrhttp2") or item is search("ausf")  
+     with_lines: cat ./{{ package_list_file }}
+     ignore_errors: yes 

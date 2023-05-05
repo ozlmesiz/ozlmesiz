@@ -1,0 +1,193 @@
+- hosts: all
+  gather_facts: false
+  become: yes
+  tasks:
+    - name: "Remove file (delete file)"
+      ansible.builtin.file:
+       path: sourcelist.txt
+       state: absent
+      delegate_to: 127.0.0.1
+    - name: "Create a directory if it does not exist"
+      ansible.builtin.file:
+       path: sourcelist.txt
+       state: touch
+       owner: cnrusr
+       group: cnrusr
+       mode: '0644'
+      delegate_to: 127.0.0.1
+    - include_vars: sto_nf_ipadress.yml
+    - block:
+      - include_tasks: check_sourcelist.yml
+        with_items: "{{udr1_ip}}"
+        loop_control:
+           loop_var: nf_ipadress
+      become: yes
+      when: inventory_hostname in groups['udr1']
+    - block:
+      - include_tasks: check_sourcelist.yml
+        with_items: "{{udr2_ip}}"
+        loop_control:
+           loop_var: nf_ipadress
+      become: yes
+      when: inventory_hostname in groups['udr2']
+    - block:
+      - include_tasks: check_sourcelist.yml
+        with_items: "{{udm1_ip}}"
+        loop_control:
+           loop_var: nf_ipadress
+      become: yes
+      when: inventory_hostname in groups['udm1']
+    - block:
+      - include_tasks: check_sourcelist.yml
+        with_items: "{{udm2_ip}}"
+        loop_control:
+           loop_var: nf_ipadress
+      become: yes
+      when: inventory_hostname in groups['udm2']
+    - block:
+      - include_tasks: check_sourcelist.yml
+        with_items: "{{ausf_ip}}"
+        loop_control:
+           loop_var: nf_ipadress
+      become: yes
+      when: inventory_hostname in groups['ausf']
+    - block:
+      - include_tasks: check_sourcelist.yml
+        with_items: "{{nrf_ip}}"
+        loop_control:
+           loop_var: nf_ipadress
+      become: yes
+      when: inventory_hostname in groups['nrf']
+    - block:
+      - include_tasks: check_sourcelist.yml
+        with_items: "{{nef_ip}}"
+        loop_control:
+           loop_var: nf_ipadress
+      become: yes
+      when: inventory_hostname in groups['nef']
+    - block:
+      - include_tasks: check_sourcelist.yml
+        with_items: "{{nssf_ip}}"
+        loop_control:
+           loop_var: nf_ipadress
+      become: yes
+      when: inventory_hostname in groups['nssf']
+    - block:
+      - include_tasks: check_sourcelist.yml
+        with_items: "{{pcf1_ip}}"
+        loop_control:
+           loop_var: nf_ipadress
+      become: yes
+      when: inventory_hostname in groups['pcf1']
+    - block:
+      - include_tasks: check_sourcelist.yml
+        with_items: "{{pcf2_ip}}"
+        loop_control:
+           loop_var: nf_ipadress
+      become: yes
+      when: inventory_hostname in groups['pcf2']
+    - block:
+      - include_tasks: check_sourcelist.yml
+        with_items: "{{amf1_ip}}"
+        loop_control:
+           loop_var: nf_ipadress
+      become: yes
+      when: inventory_hostname in groups['amf1']
+    - block:
+      - include_tasks: check_sourcelist.yml
+        with_items: "{{amf2_ip}}"
+        loop_control:
+           loop_var: nf_ipadress
+      become: yes
+      when: inventory_hostname in groups['amf2']
+    - block:
+      - include_tasks: check_sourcelist.yml
+        with_items: "{{smf1_ip}}"
+        loop_control:
+           loop_var: nf_ipadress
+      become: yes
+      when: inventory_hostname in groups['smf1']
+    - block:
+      - include_tasks: check_sourcelist.yml
+        with_items: "{{smf2_ip}}"
+        loop_control:
+           loop_var: nf_ipadress
+      become: yes
+      when: inventory_hostname in groups['smf2']
+    - block:
+      - include_tasks: check_sourcelist.yml
+        with_items: "{{upf1_ip}}"
+        loop_control:
+           loop_var: nf_ipadress
+      become: yes
+      when: inventory_hostname in groups['upf1']
+    - block:
+      - include_tasks: check_sourcelist.yml
+        with_items: "{{upf2_ip}}"
+        loop_control:
+           loop_var: nf_ipadress
+      become: yes
+      when: inventory_hostname in groups['upf2']
+    - block:
+      - include_tasks: check_sourcelist.yml
+        with_items: "{{upf3_ip}}"
+        loop_control:
+           loop_var: nf_ipadress
+      become: yes
+      when: inventory_hostname in groups['upf3']
+    - block:
+      - include_tasks: check_sourcelist.yml
+        with_items: "{{imspcscf_ip}}"
+        loop_control:
+           loop_var: nf_ipadress
+      become: yes
+      when: inventory_hostname in groups['ims-pcscf']
+    - block:
+      - include_tasks: check_sourcelist.yml
+        with_items: "{{imsicscf_ip}}"
+        loop_control:
+           loop_var: nf_ipadress
+      become: yes
+      when: inventory_hostname in groups['ims-icscf']
+    - block:
+      - include_tasks: check_sourcelist.yml
+        with_items: "{{imsscscf_ip}}"
+        loop_control:
+           loop_var: nf_ipadress
+      become: yes
+      when: inventory_hostname in groups['ims-scscf']
+    - block:
+      - include_tasks: check_sourcelist.yml
+        with_items: "{{imsmrf_ip}}"
+        loop_control:
+           loop_var: nf_ipadress
+      become: yes
+      when: inventory_hostname in groups['ims-mrf']
+    - block:
+      - include_tasks: check_sourcelist.yml
+        with_items: "{{imstas_ip}}"
+        loop_control:
+           loop_var: nf_ipadress
+      become: yes
+      when: inventory_hostname in groups['ims-tas']
+    - block:
+      - include_tasks: check_sourcelist.yml
+        with_items: "{{imsipsmgw_ip}}"
+        loop_control:
+           loop_var: nf_ipadress
+      become: yes
+      when: inventory_hostname in groups['ims-ipsmgw']
+    - block:
+      - include_tasks: check_sourcelist.yml
+        with_items: "{{imsecscf_ip}}"
+        loop_control:
+           loop_var: nf_ipadress
+      become: yes
+      when: inventory_hostname in groups['ims-ecscf']
+    - block:
+      - include_tasks: check_sourcelist.yml
+        with_items: "{{imsbgcf_ip}}"
+        loop_control:
+           loop_var: nf_ipadress
+      become: yes
+      when: inventory_hostname in groups['ims-ecscf']

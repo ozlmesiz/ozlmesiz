@@ -1,0 +1,11 @@
+- name: "get {{ package_name }} version"
+  ansible.builtin.command: dpkg-query -W -f='${Package}=${Version}\n' "{{ package_name }}" 2>/dev/null
+  register: nf_version
+  failed_when: "'FAIL' in nf_version.stderr"
+- name: "write {{ package_name }} version to file"  
+  lineinfile:
+           line: "{{ nf_version.stdout }}"
+           insertafter: EOF
+           dest: nf_version.txt
+           state: present
+  delegate_to: 127.0.0.1 

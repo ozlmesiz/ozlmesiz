@@ -1,0 +1,57 @@
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+<style>
+#pagestyle {
+border-collapse: collapse;
+width: 100%;
+}
+ 
+#pagestyle td, #personel th {
+border: 1px solid #ddd;
+padding: 8px;
+}
+ 
+#pagestyle tr {background-color: #f2f2f2;}
+ 
+#pagestyle th {
+padding-top: 12px;
+padding-bottom: 12px;
+text-align: left;
+background-color: #2c3e50;
+color: white;
+}
+</style>
+</head>
+<body>
+<table id="pagestyle">
+<tr>
+<th>NF Name</th>
+<th>NF Ip</th>
+<th>NF Services</th>
+<th>NF Service Status</th>
+<th>NF Packet Version Info</th>
+</tr>
+   {% for i in range (0,name|length) %}
+   {% set testing = services[i]|length + 1 %}
+			<tr>
+			<td rowspan= {{testing}} style="text-transform: uppercase">{{ name[i] }} </td>
+      	<td rowspan= {{testing}}> {{ ips[i] }} </td>
+      {% for j in range (0,services[i]|length) %}
+      	<tr><td>{{ services[i][j] }} </td>	
+        {% set testing1 = status[i][j] %}
+       {% if testing1 == "active" %}
+      <td style="color:green"> Running... </td>	
+      {% else %}
+       <td style="color:red"> !!NOT RUNNING!! </td>
+{% endif %}
+<td> {{ packet[i][j] }}</td>	
+</tr>
+		{% endfor %}
+   	</tr>
+   	{% endfor %}
+</table>	
+
+</body>
+
+</html>

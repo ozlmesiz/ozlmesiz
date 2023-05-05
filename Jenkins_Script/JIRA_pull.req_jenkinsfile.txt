@@ -1,0 +1,17 @@
+node {
+    
+  stage('Create issue') {
+    withEnv(['JIRA_SITE=JIRA']) {
+      def testIssue = [fields: [ project: [key: 'CID'],
+                                 summary: "${Jobname} build failed" ,
+                                 description: " Created bug issue for ${Jobname} failed Build URL ${Build_URL},Pullrequesttitle: ${Pullrequest} ",
+                                 issuetype: [id: '10100'],
+                                 priority: [name: 'Lowest'],
+                                 assignee: [name: "${user}"]]]
+     response = jiraNewIssue issue: testIssue
+
+      echo response.successful.toString()
+      echo response.data.toString()
+    }
+  }
+}

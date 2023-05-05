@@ -1,0 +1,244 @@
+[nrf1]
+10.10.31.113  ansible_ssh_user=cnrusr ansible_ssh_pass=P5vKG6vE 
+[nrf2]
+10.10.31.35 ansible_ssh_user=cnrusr ansible_ssh_pass=P5vKG6vE
+[nrf3]
+10.10.31.43 ansible_ssh_user=cnrusr ansible_ssh_pass=P5vKG6vE
+
+[nrf:children]
+nrf1
+nrf2
+nrf3
+
+[nssf]
+10.10.31.111  ansible_ssh_user=cnrusr ansible_ssh_pass=P5vKG6vE 
+
+[udm1]
+10.10.31.99  ansible_ssh_user=cnrusr ansible_ssh_pass=P5vKG6vE 
+[udm2]
+10.10.31.63  ansible_ssh_user=cnrusr ansible_ssh_pass=P5vKG6vE 
+[udm3]
+10.10.31.47 ansible_ssh_user=cnrusr ansible_ssh_pass=P5vKG6vE 
+
+[udm:children]
+udm1
+udm2
+udm3
+
+
+[udr1]
+10.10.31.129  ansible_ssh_user=cnrusr ansible_ssh_pass=P5vKG6vE 
+
+[udr2]
+10.10.31.53 ansible_ssh_user=cnrusr ansible_ssh_pass=P5vKG6vE 
+[udr3]
+10.10.31.45 ansible_ssh_user=cnrusr ansible_ssh_pass=P5vKG6vE
+
+[udr:children]
+udr1
+udr2
+udr3
+
+[ausf1]
+10.10.31.88   ansible_ssh_user=cnrusr ansible_ssh_pass=P5vKG6vE 
+[ausf2]
+10.10.31.14  ansible_ssh_user=cnrusr ansible_ssh_pass=P5vKG6vE
+
+[ausf:children]
+ausf1
+ausf2
+
+[pcf1]
+10.10.31.120  ansible_ssh_user=cnrusr ansible_ssh_pass=P5vKG6vE
+
+[pcf2]
+10.10.31.126  ansible_ssh_user=cnrusr ansible_ssh_pass=P5vKG6vE
+
+[pcf3]
+10.10.31.132  ansible_ssh_user=cnrusr ansible_ssh_pass=P5vKG6vE
+
+[pcf:children]
+pcf1
+pcf2
+
+[smf1]
+10.10.31.100  ansible_ssh_user=cnrusr ansible_ssh_pass=P5vKG6vE
+
+[smf2]
+10.10.31.134  ansible_ssh_user=cnrusr ansible_ssh_pass=P5vKG6vE
+
+[smf3]
+10.10.31.137  ansible_ssh_user=cnrusr ansible_ssh_pass=P5vKG6vE
+
+[smf:children]
+smf1
+smf2
+smf3
+
+[amf1]
+10.10.31.109  ansible_ssh_user=cnrusr ansible_ssh_pass=P5vKG6vE
+
+[amf2]
+10.10.31.102  ansible_ssh_user=cnrusr ansible_ssh_pass=P5vKG6vE
+
+[amf3]
+10.10.31.122  ansible_ssh_user=cnrusr ansible_ssh_pass=P5vKG6vE
+
+[amf:children]
+amf1
+amf2
+amf3
+
+[upf1]
+10.10.31.30   ansible_ssh_user=cnrusr ansible_ssh_pass=P5vKG6vE
+
+[upf2]
+10.10.31.23   ansible_ssh_user=cnrusr ansible_ssh_pass=P5vKG6vE
+
+[upf3]
+10.10.31.56   ansible_ssh_user=cnrusr ansible_ssh_pass=P5vKG6vE
+
+[upf:children]
+upf1
+upf2
+upf3
+
+[smsf]
+10.10.31.128   ansible_ssh_user=cnrusr ansible_ssh_pass=P5vKG6vE
+
+[nef]
+10.10.31.114   ansible_ssh_user=cnrusr ansible_ssh_pass=P5vKG6vE
+
+[ims-pcscf]
+10.10.31.121 ansible_ssh_user=cnrusr ansible_ssh_pass=P5vKG6vE
+10.10.31.125 ansible_ssh_user=cnrusr ansible_ssh_pass=P5vKG6vE
+10.10.31.141 ansible_ssh_user=cnrusr ansible_ssh_pass=P5vKG6vE
+
+[ims-icscf]
+10.10.31.116 ansible_ssh_user=cnrusr ansible_ssh_pass=P5vKG6vE
+
+[ims-scscf]
+10.10.31.117 ansible_ssh_user=cnrusr ansible_ssh_pass=P5vKG6vE
+
+[ims-tas]
+10.10.31.92 ansible_ssh_user=cnrusr ansible_ssh_pass=P5vKG6vE
+
+[ims-mrf]
+10.10.31.87 ansible_ssh_user=cnrusr ansible_ssh_pass=P5vKG6vE
+
+[ims-ipsmgw]
+10.10.31.54 ansible_ssh_user=cnrusr ansible_ssh_pass=P5vKG6vE
+
+[ims-ecscf]
+10.10.31.104 ansible_ssh_user=cnrusr ansible_ssh_pass=P5vKG6vE
+
+[ims-bgcf]
+10.10.31.123 ansible_ssh_user=cnrusr ansible_ssh_pass=P5vKG6vE
+
+[ims:children]
+ims-pcscf
+ims-icscf
+ims-scscf
+ims-tas
+ims-mrf
+ims-ipsmgw
+ims-ecscf
+ims-bgcf
+
+[mc-csc-01]
+10.10.31.97 ansible_ssh_user=cnrusr ansible_ssh_pass=P5vKG6vE
+
+[mc-csc-02]
+10.10.31.75 ansible_ssh_user=cnrusr ansible_ssh_pass=P5vKG6vE
+
+[mc-csc-03]
+10.10.31.101 ansible_ssh_user=cnrusr ansible_ssh_pass=P5vKG6vE
+
+[mcx-server-01]
+10.10.31.106 ansible_ssh_user=cnrusr ansible_ssh_pass=P5vKG6vE
+
+[mcx-server-02]
+10.10.31.25 ansible_ssh_user=cnrusr ansible_ssh_pass=P5vKG6vE
+
+[mcx-server-03]
+10.10.31.105 ansible_ssh_user=cnrusr ansible_ssh_pass=P5vKG6vE
+
+[mcx-server-01a]
+10.10.31.37 ansible_ssh_user=cnrusr ansible_ssh_pass=P5vKG6vE
+
+[mcx-server-01b]
+10.10.31.124 ansible_ssh_user=cnrusr ansible_ssh_pass=P5vKG6vE
+
+[mcx-server-02a]
+10.10.31.115 ansible_ssh_user=cnrusr ansible_ssh_pass=P5vKG6vE
+
+[mcx-server-02b]
+10.10.31.130 ansible_ssh_user=cnrusr ansible_ssh_pass=P5vKG6vE
+
+[ims-server-4g]
+10.10.31.107 ansible_ssh_user=cnrusr ansible_ssh_pass=P5vKG6vE
+
+[lmr-gw]
+10.10.31.93 ansible_ssh_user=cnrusr ansible_ssh_pass=P5vKG6vE
+
+[alea_mcx]
+10.10.31.51 ansible_ssh_user=cnrusr ansible_ssh_pass=P5vKG6vE
+
+[mc:children]
+mc-csc-01
+mc-csc-02
+mc-csc-03
+mcx-server-01
+mcx-server-02
+mcx-server-03
+mcx-server-01a
+mcx-server-01b
+mcx-server-02a
+mcx-server-02b
+ims-server-4g
+lmr-gw
+alea_mcx
+
+[sto:children]
+nrf1
+nrf2
+nrf3
+nssf
+udm
+udr
+ausf
+pcf1
+pcf2
+pcf3
+smf1
+smf2
+smf3
+upf1
+upf2
+upf3
+amf1
+amf2
+amf3
+smsf
+nef
+ims-pcscf
+ims-icscf
+ims-scscf
+ims-tas
+ims-mrf
+ims-ipsmgw
+ims-ecscf
+ims-bgcf
+mc-csc-01
+mc-csc-02
+mc-csc-03
+mcx-server-01a
+mcx-server-01b
+mcx-server-02a
+mcx-server-02b
+ims-server-4g
+lmr-gw
+alea_mcx
+
+[envovergw:children]
+sto

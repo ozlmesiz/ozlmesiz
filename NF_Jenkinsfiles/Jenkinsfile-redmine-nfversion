@@ -1,0 +1,90 @@
+// gitlabActionType NULL olması manuel olarak jenkins üzerinden build alındığı anlamına geliyor.
+@Library('5gcn_jenkins_library') _
+
+pipeline{
+    agent {
+            label 'cinar_box_1.1_functional_test'
+    }
+
+    parameters {
+        choice(name: 'test_ortami', choices: ['VTO', 'TT', 'PTO'], description: 'test_ortami')
+        choice(name: 'test_type', choices: ['vto', 'tt', 'pto'], description: 'test_type')
+        choice(name: 'inventory_file', choices: ['VTO_hosts', 'TT_hosts', 'PTO_hosts'], description: 'inventory_file')    
+        string(name:'DEBIAN_REPOSITORY', defaultValue:"debrepo.ulakhaberlesme.com.tr", description:"Chart Museum URL")
+        string(name:'REPO_CREDENTIALS', defaultValue: "jenkins.service", description:"devops  Repository Credentials ID")
+        string(name:'REPO_URL', defaultValue: "http://gitlab.ulakhaberlesme.com.tr/CIN/DevOps.git", description:"Main Repo URL")
+        string(name:'REPO_BRANCH', defaultValue: "master", description:"Main Repo Branch")
+        string(name: 'host_group', defaultValue: "all", description: 'NF Host Name')
+    }
+
+    environment {
+        REPO_YAML_BRANCH = 'master'
+        DEBREPO_CREDENTIALS = credentials('debrepo_credentials')
+        JENKINS_CREDENTIALS = credentials('jenkins.service')
+    }
+    stages{
+        stage("Environment Variables"){
+            steps {
+                sh "printenv"
+            }
+        }
+        stage("Clean Workspace"){
+            steps {
+                cleanWs()
+            }
+        }
+        stage('Cloning Repository'){
+            when {
+                expression {
+                    return (env.gitlabActionType == null || env.gitlabActionType == "PUSH")
+                }
+            }
+            steps{
+                script {
+                    updateGitlabCommitStatus name: 'repo clone', state: 'running'
+                    echo "========executing >> Cloning the AMF repository stage========"
+                    def branch = env.gitlabBranch == null ? env.REPO_BRANCH : env.gitlabBranch
+                    def gitUrl = env.gitlabSourceRepoHomepage == null ? env.REPO_URL : env.gitlabSourceRepoHomepage
+                    echo ">>> Using URL: ${gitUrl} ..."
+                    echo ">>> Using branch: ${branch} ..."
+                    git url: "${gitUrl}", credentialsId: "${REPO_CREDENTIALS}", branch: "${branch}"
+                }
+            }
+            post{
+                always{
+                    echo "========always for Clone Repository Stage========"
+                }
+                success{
+                    echo "========Clone Repository stage executed successfully========"
+                    updateGitlabCommitStatus name: 'repo clone', state: 'success'
+                }
+                failure{
+                    echo "========Clone Repository stage execution failed========"
+                    updateGitlabCommitStatus name: 'repo clone', state: 'failed'
+                }
+            }
+        }
+        stage('Generate NF version.txt') {
+            steps {
+                script {
+                    sh """ #!/bin/bash
+                          /home/jenkins/.local/bin/ansible-playbook /home/jenkins/workspace/${JOB_NAME}/ansible/${params.test_ortami}_NF_version_check/get_NF_version.yaml -i /home/jenkins/workspace/${JOB_NAME}/ansible/${params.inventory_file} -l ${params.host_group} -f 5
+                         cd /home/jenkins/workspace/${JOB_NAME}/ansible/${params.test_ortami}_NF_version_check
+                         cat nf_version.txt
+                         cp nf_version.txt /home/jenkins/NF_Version/${params.test_type}-package-list-latest """
+                }
+            }
+        }
+        stage('Fetch data from Redmine wiki') {
+            steps {
+                script {
+                    sh '''
+                        curl http://redmine.ulakhaberlesme.com.tr/projects/cinar_devops/wiki/SKT_&_TT_Version | grep -A 1000 "|NF|" | awk -F "|" '{print $3,$4}' | sed 's/^ *//g' | sed 's/ *$//g' | sed 's/ /\\t/g' > data.tsv
+                    '''
+                }
+            }
+        }
+    }
+}
+                
+                

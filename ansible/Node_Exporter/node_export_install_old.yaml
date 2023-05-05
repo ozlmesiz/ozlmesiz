@@ -1,0 +1,42 @@
+#example playbook run
+#ansible-playbook node_export_install.yaml -i PTO_hosts -e "version=1.3.1 -e metrics='--collector.disable-defaults --collector.cpu  --collector.cpufreq --collector.diskstats --collector.arp --collector.ethtool --collector.meminfo --collector.netstat --collector.network_route'"
+
+- hosts: all
+  vars:
+     ne_metrics: "{{ metrics }}"
+     ne_version: "{{ version }}"
+  become: yes
+  tasks:
+   - name: download node-exporter
+     get_url:
+       url: https://github.com/prometheus/node_exporter/releases/download/v{{ ne_version }}/node_exporter-{{ ne_version }}.linux-amd64.tar.gz
+       dest: /home/cnrusr/
+       mode: '0440'
+   - name: extract node-exporter.tar.gz
+     ansible.builtin.unarchive:
+       src: /home/cnrusr/node_exporter-{{ ne_version }}.linux-amd64.tar.gz
+       dest: /home/cnrusr/
+       remote_src: yes
+   - name: evaluate running node_exporter processes from remote host
+     command: /usr/bin/pgrep node_exporter
+     register: running_node_exporter
+     failed_when: running_node_exporter.rc > 1
+     changed_when: 
+       - running_node_exporter.rc == 0
+     tags:
+      - stop
+   - name: force kill node-exporter process 
+     ansible.builtin.command: /usr/bin/pkill -9 node_exporter
+     register: kill9_node_exporter
+     changed_when: kill9_node_exporter.rc == 0
+     failed_when: kill9_node_exporter.rc > 1
+     when:
+      - running_node_exporter.stdout_lines | length > 0
+     tags:
+      - stop
+   - name: execute node-exporter 
+     ansible.builtin.shell: ./node_exporter {{ ne_metrics }} >/dev/null 2>&1 &
+     async: 10
+     poll: 0
+     args:
+       chdir: /home/cnrusr/node_exporter-{{ ne_version }}.linux-amd64

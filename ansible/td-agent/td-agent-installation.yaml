@@ -1,0 +1,39 @@
+- hosts: all
+  become: yes
+  gather_facts: false
+  tasks:
+  - name: install td-agent
+    apt:
+      name: td-agent=3.8.1-0
+      allow_unauthenticated: yes
+  - name: backup agent first config
+    command: mv /etc/td-agent/td-agent.conf /etc/td-agent/td-agent.bck
+  - name: Copy file with owner and permissions
+    ansible.builtin.copy:
+      src: ./td-agent/td-agent.conf
+      dest: /etc/td-agent/td-agent.conf
+      owner: root
+      group: root
+      mode: '0644' 
+  - name: change to rotate date
+    lineinfile:
+      path: /etc/logrotate.d/td-agent
+      search_string: '  rotate 30'
+      line: '  rotate 10'
+      owner: root
+      group: root
+      mode: '0644'
+  - name: configure td-agent config file 
+    ansible.builtin.lineinfile:
+      path: /etc/td-agent/td-agent.conf
+      search_string: '${i}'
+      line: "{{ item.split('=')[0] }}"     
+      owner: root
+      group: root
+      mode: '0644'
+    when: item is search inventory_hostname 
+    with_lines: cat ./nf-ip-td-agent 
+  - name: td-agent service restart
+    ansible.builtin.service:
+      name: td-agent
+      state: restarted

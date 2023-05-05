@@ -1,0 +1,63 @@
+pipeline {
+    agent any
+
+    parameters {
+        string(name: 'OLD_PACKAGE_NAME', defaultValue: 'old_package_name', description: 'Current package name')
+        string(name: 'NEW_PACKAGE_NAME', defaultValue: 'new_package_name', description: 'New package name')
+        string(name: 'NEW_TAG_NAME', defaultValue: 'new_tag_name', description: 'New tag name')
+    }
+
+    stages {
+        stage('Checkout') {
+            steps {
+                checkout([$class: 'GitSCM', branches: [[name: '*/new_branch_name']],
+                         userRemoteConfigs: [[credentialsId: 'bitbucket-creds',
+                                              url: 'https://bitbucket.org/username/repo_slug.git']]])
+            }
+        }
+        stage('Change Package Name') {
+            steps {
+                sh "sed -i 's/${params.OLD_PACKAGE_NAME}/${params.NEW_PACKAGE_NAME}/g' your_file_name"
+            }
+        }
+        stage('Commit Changes') {
+            steps {
+                sh 'git add .'
+                sh 'git commit -m "Changed package name"'
+            }
+        }
+        stage('Rename Tag') {
+            steps {
+                sh 'git tag -d my-tag'
+                sh 'git tag my-new-tag'
+                sh 'git push origin :refs/tags/my-tag'
+                sh 'git push origin my-new-tag'
+            }
+        }
+        stage('Build Package') {
+            steps {
+                sh 'mvn clean package'
+                sh 'dpkg-buildpackage -uc -us'
+            }
+        }
+        stage('Publish Package') {
+            steps {
+                sh 'dput my-repo ../my-package.deb'
+            }
+        }        
+        stage('Create Tag on Bitbucket') {
+            steps {
+                script {
+                    def tagJson = '{"name": "'+params.NEW_TAG_NAME+'", "target": {"hash": "HEAD"}}'
+                    def bitbucketUrl = "https://api.bitbucket.org/2.0/repositories/username/repo_slug/refs/tags"
+                    def bitbucketCredentials = "bitbucket-creds"
+                    def httpResponse = sh (
+                        script: 'curl -H "Content-Type: application/json" -X POST -u $BITBUCKET_CREDENTIALS --data \''+tagJson+'\' '+bitbucketUrl,
+                        returnStdout: true
+                    )
+                    println("Bitbucket API response: ${httpResponse}")
+                }
+            }
+        }
+    }
+}

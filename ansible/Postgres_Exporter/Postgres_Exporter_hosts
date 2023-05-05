@@ -1,0 +1,10 @@
+[test]
+IP ansible_ssh_user=<USER> ansible_ssh_pass=<PASS>
+
+
+[pto:children]
+test
+
+[envovergw_pto:children]
+pto
+

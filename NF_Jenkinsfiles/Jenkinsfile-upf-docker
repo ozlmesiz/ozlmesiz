@@ -1,0 +1,147 @@
+#!/usr/bin/env groovy
+// Define variables
+List branch_list = ["\"Not Installation:selected\"","\"${env.BRANCH_NAME}\""]
+List debug_item = ["\"Select:selected\"","\"VTO\"","\"RTO\""]
+List release_item = ["\"Select:selected\"","\"STO\"","\"PTO\""]
+List default_item = ["\"Not Installation\""]
+String branches = buildScript(branch_list)
+String release = buildScript(release_item)
+String debug = buildScript(debug_item)
+String setups = populateSetups(default_item,debug_item,release_item)
+// Methods to build groovy scripts to populate data
+String buildScript(List values){
+  return "return $values"
+}
+String populateSetups(List default_item, List debugList, List releaseList){
+return """if(Branches =~ /^developer(.*)/){
+     return $debugList
+     }
+     else if(Branches =~ /^master(.*)/){
+     return $releaseList
+     }else{
+     return $default_item
+     }
+     """
+}
+// Define variables
+List build_list = ["\"Standart:selected\"","\"Mellanox\""]
+List mellanox_item = ["\"dist-mellanox\""]
+List default_command = ["\"dist\""]
+String builds = targetScript(build_list)
+String mellanox = targetScript(mellanox_item)
+String targets = choiceTarget(default_command,mellanox_item)
+// Methods to build groovy scripts to populate data
+String targetScript(List values){
+  return "return $values"
+}
+String choiceTarget(List default_command, List mellanoxList){
+return """if(Builds.equals('Mellanox')){
+     return $mellanoxList
+     }else{
+     return $default_command
+     }
+     """
+}
+// Properties step to set the Active choice parameters via 
+// Declarative Scripting
+properties([
+    parameters([
+        [$class: 'ChoiceParameter', choiceType: 'PT_SINGLE_SELECT',   name: 'Branches', script: [$class: 'GroovyScript', fallbackScript: [classpath: [], sandbox: false, script: 'return ["ERROR"]'], script: [classpath: [], sandbox: false,
+        script:  branches]]],
+        [$class: 'CascadeChoiceParameter', choiceType: 'PT_SINGLE_SELECT',name: 'Setups', referencedParameters: 'Branches', script: [$class: 'GroovyScript', fallbackScript: [classpath: [], sandbox: false, script: 'return ["error"]'], script: [classpath: [], sandbox: false, script: setups]]],
+        [$class: 'ChoiceParameter', choiceType: 'PT_SINGLE_SELECT',   name: 'Builds', script: [$class: 'GroovyScript', fallbackScript: [classpath: [], sandbox: false, script: 'return ["ERROR"]'], script: [classpath: [], sandbox: false,
+        script:  builds]]],
+        [$class: 'CascadeChoiceParameter', choiceType: 'PT_SINGLE_SELECT',name: 'Targets', referencedParameters: 'Builds', script: [$class: 'GroovyScript', fallbackScript: [classpath: [], sandbox: false, script: 'return ["error"]'], script: [classpath: [], sandbox: false, script: targets]]]
+    ])
+])
+pipeline {
+    agent none
+    parameters {
+        string(name: 'TARGET_MAIN_BRANCH', defaultValue: '', description: 'if you want to merge, please select merge branch (like master, master-async otherwise keep to empty)')
+    }
+
+    stages {
+
+      stage('Initialize') {
+           agent {
+               dockerfile {
+               filename 'cinar_build.Dockerfile'
+               dir 'docker'
+               additionalBuildArgs "--add-host=debrepo-cinar.ulakhaberlesme.com.tr:10.10.21.24 --add-host=debrepo.ulakhaberlesme.com.tr:10.10.21.24  --add-host=gitlab.ulakhaberlesme.com.tr:192.168.57.53 --build-arg uid=\$(id -u) --build-arg gid=\$(id -g) --tag cinarupf-\$(echo $JOB_NAME | awk -F '/' '{print \$1}'):1.0"
+               args "-v /etc/ssl/certs/:/etc/ssl/certs/ -v /etc/hosts:/etc/hosts --add-host=debrepo.ulakhaberlesme.com.tr:10.10.21.24  --add-host=debrepo-cinar.ulakhaberlesme.com.tr:10.10.21.24 "
+               customWorkspace "${env.JOB_NAME}"
+               label "Jenkins-UI"
+               reuseNode true
+             }
+           }
+             steps {
+                echo 'cinar_build container is up.'
+                deleteDir()
+            }
+         }
+        stage('Continous-Integration-Testing') {
+            agent {
+                dockerfile {
+                filename 'cinar_build.Dockerfile'
+                dir 'docker'
+                additionalBuildArgs "--add-host=debrepo-cinar.ulakhaberlesme.com.tr:10.10.21.24  --add-host=debrepo.ulakhaberlesme.com.tr:10.10.21.24  --add-host=gitlab.ulakhaberlesme.com.tr:192.168.57.53 --build-arg uid=\$(id -u) --build-arg gid=\$(id -g) --tag cinarupf-\$(echo $JOB_NAME | awk -F '/' '{print \$1}'):1.0"
+                args "-v /etc/hosts:/etc/hosts -v /etc/ssl/certs:/etc/ssl/certs -v /var/run/docker.sock:/var/run/docker.sock --add-host=debrepo.ulakhaberlesme.com.tr:10.10.21.24  --add-host=debrepo-cinar.ulakhaberlesme.com.tr:10.10.21.24"
+                customWorkspace "${env.JOB_NAME}"
+                label "Jenkins-UI"
+                reuseNode true
+                }
+            }
+            stages {
+                stage('Main-Build') {
+
+                    when {expression {return env.CHANGE_TARGET == null}}
+
+                    steps {
+                        script {   
+                            echo "${env.Setups}"   
+                            echo "${JOB_NAME}"
+                            echo "${env.Targets}"
+                            sh """#!/bin/bash
+                                export CINAR_BASE=/opt/cinar
+                                cp -R /opt/cinar/certificate ${WORKSPACE}
+                                make ${env.Targets}
+                                sudo cp ${WORKSPACE}/dist/*.deb /opt/cinar/packages
+                            """
+                           
+                        }
+                    }
+                }
+                stage ('PR-Build'){
+
+                    when {expression {return env.CHANGE_TARGET != null}}
+
+                    steps {
+                        script {      
+                            sh '''#!/bin/bash
+                                git config --global http.sslverify "false"
+                                export CINAR_BASE=/opt/cinar
+                                cp -R /opt/cinar/certificate ${WORKSPACE}
+                                make clean
+                                make all
+                                make test
+                            '''     
+                            sh "sed 's/location file\\=/location file\\=\"CIN\\/developer\\//g' ./bin/cppcheck-cnrupf.xml"
+                        }
+                    }
+                }
+
+                stage('Upload-Artifact') {
+                    when {expression {return env.CHANGE_TARGET == null}}
+                    steps {
+                        script {
+                            sh """#!/bin/bash
+                                sudo rsync -avz --rsh="/usr/bin/sshpass -p "724365" ssh -o StrictHostKeyChecking=no -l root" /opt/cinar/packages/ ubuntu@10.10.21.24:/home/ubuntu/docker/ulak-aptly/volume/incoming/xenial-unstable
+                            """
+                        }
+                    }
+                }
+            }
+
+        }
+    }
+}

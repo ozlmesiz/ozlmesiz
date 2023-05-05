@@ -1,0 +1,320 @@
+#!/usr/bin/env groovy
+// Define variables
+List branch_list = ["\"Not Installation:selected\"","\"${env.BRANCH_NAME}\""]
+List debug_item = ["\"Select:selected\"","\"VTO\"","\"RTO\""]
+List release_item = ["\"Select:selected\"","\"STO\"","\"PTO\""]
+List default_item = ["\"Not Installation\""]
+String branches = buildScript(branch_list)
+String release = buildScript(release_item)
+String debug = buildScript(debug_item)
+String setups = populateSetups(default_item,debug_item,release_item)
+// Methods to build groovy scripts to populate data
+String buildScript(List values){
+  return "return $values"
+}
+String populateSetups(List default_item, List debugList, List releaseList){
+return """if(Branches =~ /^developer(.*)/){
+     return $debugList
+     }
+     else if(Branches =~ /^master(.*)/){
+     return $releaseList
+     }else{
+     return $default_item
+     }
+     """
+}
+// Define variables
+List build_list = ["\"Standart:selected\"","\"Mellanox\""]
+List mellanox_item = ["\"dist-mellanox\""]
+List default_command = ["\"dist\""]
+String builds = targetScript(build_list)
+String mellanox = targetScript(mellanox_item)
+String targets = choiceTarget(default_command,mellanox_item)
+// Methods to build groovy scripts to populate data
+String targetScript(List values){
+  return "return $values"
+}
+String choiceTarget(List default_command, List mellanoxList){
+return """if(Builds.equals('Mellanox')){
+     return $mellanoxList
+     }else{
+     return $default_command
+     }
+     """
+}
+// Properties step to set the Active choice parameters via 
+// Declarative Scripting
+properties([
+    parameters([
+        [$class: 'ChoiceParameter', choiceType: 'PT_SINGLE_SELECT',   name: 'Branches', script: [$class: 'GroovyScript', fallbackScript: [classpath: [], sandbox: false, script: 'return ["ERROR"]'], script: [classpath: [], sandbox: false,
+        script:  branches]]],
+        [$class: 'CascadeChoiceParameter', choiceType: 'PT_SINGLE_SELECT',name: 'Setups', referencedParameters: 'Branches', script: [$class: 'GroovyScript', fallbackScript: [classpath: [], sandbox: false, script: 'return ["error"]'], script: [classpath: [], sandbox: false, script: setups]]],
+        [$class: 'ChoiceParameter', choiceType: 'PT_SINGLE_SELECT',   name: 'Builds', script: [$class: 'GroovyScript', fallbackScript: [classpath: [], sandbox: false, script: 'return ["ERROR"]'], script: [classpath: [], sandbox: false,
+        script:  builds]]],
+        [$class: 'CascadeChoiceParameter', choiceType: 'PT_SINGLE_SELECT',name: 'Targets', referencedParameters: 'Builds', script: [$class: 'GroovyScript', fallbackScript: [classpath: [], sandbox: false, script: 'return ["error"]'], script: [classpath: [], sandbox: false, script: targets]]]
+    ])
+])
+pipeline {
+    agent none
+    parameters {
+        string(name: 'TARGET_MAIN_BRANCH', defaultValue: '', description: 'if you want to merge, please select merge branch (like master, master-async otherwise keep to empty)')
+    }
+    options {
+        buildDiscarder logRotator(
+            daysToKeepStr: '5',
+            numToKeepStr: '5'
+            )
+    }
+    stages {
+
+        stage('Continous-Integration-Testing') {
+            agent {
+                node {
+                  label "cinar_box_1.1_karel"
+                }
+            }
+            stages {
+                stage('Main-Build') {
+
+                    when {expression {return env.CHANGE_TARGET == null}}
+
+                    steps {
+                        script {   
+                            echo "${env.Setups}"   
+                            echo "${JOB_NAME}"
+                            echo "${env.Targets}"
+                            sh """#!/bin/bash
+                                export CINAR_BASE=/opt/cinar
+                                cp -R /opt/cinar/certificate ${WORKSPACE}
+                                make ${env.Targets}
+                            """
+                            sh "sed 's/location file\\=/location file\\=\"CIN\\/developer\\//g' ./bin/cppcheck-cnrupf.xml"
+                        }
+                    }
+                }
+                stage ('PR-Build'){
+
+                    when {expression {return env.CHANGE_TARGET != null}}
+
+                    steps {
+                        script {      
+                            sh '''#!/bin/bash
+                                export CINAR_BASE=/opt/cinar
+                                cp -R /opt/cinar/certificate ${WORKSPACE}
+                                make clean
+                                make all
+                                make test
+                            '''     
+                            sh "sed 's/location file\\=/location file\\=\"CIN\\/developer\\//g' ./bin/cppcheck-cnrupf.xml"
+                        }
+                    }
+                }
+                stage('UnitTest-Coverage') {
+                    steps {
+                        sh """
+                        echo "Running Unit Tests"
+                        """
+                        junit '**/test/unit-tests/**/test*.xml'
+                        sh """
+                        echo "Running Cobertura Code Coverage"
+                        """
+                        cobertura autoUpdateHealth: false, autoUpdateStability: false, classCoverageTargets: '100, 0, 100', coberturaReportFile: '**/test/unit-tests/**/coverage*.xml', conditionalCoverageTargets: '10, 0, 10', failUnhealthy: false, fileCoverageTargets: '100, 0, 100', lineCoverageTargets: '70, 0, 70', maxNumberOfBuilds: 0, methodCoverageTargets: '100, 0, 100', onlyStable: false, packageCoverageTargets: '100, 0, 100', sourceEncoding: 'ASCII', zoomCoverageChart: false
+                        sh """
+                        echo "Running Code Coverage"
+                        """
+                        publishCoverage adapters: [coberturaAdapter('**/test/unit-tests/**/coverage*.xml')], failUnstable: true, globalThresholds: [[thresholdTarget: 'Method', unstableThreshold: 100.0], [thresholdTarget: 'Package', unstableThreshold: 100.0], [thresholdTarget: 'Line', unstableThreshold: 70.0], [thresholdTarget: 'Conditional', unstableThreshold: 10.0], [thresholdTarget: 'Class', unstableThreshold: 100.0], [thresholdTarget: 'File', unstableThreshold: 100.0]], sourceFileResolver: sourceFiles('STORE_LAST_BUILD')
+                    }
+                }
+                stage('Static-Code') {
+                    steps {
+                        sh """
+                        echo "Running Code Analysis"
+                        """
+                        publishCppcheck failureThreshold: '0', newFailureThreshold: '0', pattern: '**/cppcheck*.xml', severityInformation: false, severityNoCategory: false, severityPortability: false, severityStyle: false, unHealthy: '1'
+                    }
+                }
+                stage("Doxygen-Report") {
+                    steps {
+                        sh """
+                            echo "Doxygen report"
+                            """
+                            publishHTML([allowMissing: true, alwaysLinkToLastBuild: false, keepAll: false, reportDir: 'docs/html', reportFiles: 'index.html', reportName: 'HTML Report', reportTitles: ''])
+                    }
+                }
+                stage('Upload-Artifact') {
+                    when {expression {return env.CHANGE_TARGET == null}}
+                    steps {
+                        script {
+                            sh """#!/bin/bash
+                                rsync -avz --rsh="/usr/bin/sshpass -p "724365" ssh -o StrictHostKeyChecking=no -l root" /opt/cinar/packages/ ubuntu@192.168.13.47:/debrepo/latest
+                            """
+                            sh """#!/bin/bash
+                                rsync -avz --rsh="/usr/bin/sshpass -p "724365" ssh -o StrictHostKeyChecking=no -l root" /opt/cinar/packages/ ubuntu@192.168.13.47:/debrepo/cinar
+                            """
+                        }
+                    }
+                }
+            }
+            post {
+                always {
+                    deleteDir()
+                }
+            }
+        }
+        stage('Merge and Tag') {
+            agent {
+                node {
+                    label 'CINAR_BUILD_NODE_1'
+                }
+            }
+            stages {
+                stage('Merge-to-branch') {
+
+                    when {
+                        expression { return env.CHANGE_TARGET == null }
+                        branch 'developer*'
+                        not { environment name: 'TARGET_MAIN_BRANCH', value: '' }
+                    }
+                    environment {
+                        VERSION=sh(returnStdout: true, script:"VERSION=${MAJOR}.${PHASE_NUMBER}.${SPRINT_NUMBER}.${env.BUILD_NUMBER} && echo \"\$VERSION\"").trim()
+                        NF_NAME=sh(returnStdout: true, script:"NF_NAME=\$(echo $JOB_NAME | awk -F '/' '{print \$1}') && echo \"\$NF_NAME\"").trim()
+                    }
+                    steps {
+                        sshagent(['cinar-build-node-1']) {
+                            sh """#!/bin/bash
+                            ls -ltr
+                            git config --global credential.helper store
+                            git config --global user.name "jenkins.servis"
+                            git push -f origin HEAD:${TARGET_MAIN_BRANCH}"""
+                        }
+                    }
+                }
+                stage('Tag-to-Commit') {
+
+                    when {
+                        expression { return env.CHANGE_TARGET == null }
+                    }
+                    environment {
+                        VERSION=sh(returnStdout: true, script:"VERSION=${MAJOR}.${PHASE_NUMBER}.${SPRINT_NUMBER}.${env.BUILD_NUMBER} && echo \"\$VERSION\"").trim()
+                        NF_NAME=sh(returnStdout: true, script:"NF_NAME=\$(echo $JOB_NAME | awk -F '/' '{print \$1}') && echo \"\$NF_NAME\"").trim()
+                    }
+                    steps {
+                        sshagent(['cinar-build-node-1']) {
+                            sh """#!/bin/bash
+                                ls -ltr
+                                git config --global credential.helper store
+                                git config --global user.name "jenkins.servis"
+                                git tag -a "${env.NF_NAME}-${env.VERSION}" -m "${env.NF_NAME} new version is ${env.VERSION}"
+                                git push -f origin "${env.NF_NAME}-${env.VERSION}"
+                            """
+                        }
+                    }
+                }
+            }
+            post {
+                always {
+                    deleteDir()
+                }
+            }
+        }
+        stage('Continous-Deployment') {
+            agent {
+                node {
+                    label 'cinar_box_1.1_functional_test'
+                }
+            }
+            when {
+                expression {return env.CHANGE_TARGET == null}
+                not { environment name: 'Setups', value: 'Not Installation' }
+            }
+             environment {
+                VERSION=sh(returnStdout: true, script:"VERSION=${MAJOR}.${PHASE_NUMBER}.${SPRINT_NUMBER}.${env.BUILD_NUMBER} && echo \"\$VERSION\"").trim()
+                NF_NAME=sh(returnStdout: true, script:"NF_NAME=\$(echo $JOB_NAME | awk -F '/' '{print \$1}') && echo \"\$NF_NAME\"").trim()
+            }
+            steps {
+                dir('Devops') {
+                    checkout([$class: 'GitSCM',
+                    branches: [[name: '*/master']],
+                    extensions: [[$class: 'CleanBeforeCheckout']],
+                    userRemoteConfigs: [[
+                    credentialsId: '7267ca7d-ae35-456c-9732-4c84b1d2c715',
+                    url: 'https://bitbucket.ulakhaberlesme.com.tr:8443/scm/cin/devops.git']]]) 
+                }
+                echo "NF ${env.NF_NAME}"
+                echo "version ${env.VERSION}"
+                sh """
+                cd ${WORKSPACE}/Devops/ansible
+                echo "${env.NF_NAME}=${env.VERSION}" > package-list
+                ansible-playbook ${params.Setups}_nf_package_install.yaml -i ${params.Setups}_hosts -l `echo $JOB_NAME | awk -F '/' '{print \$1}' | sed s/"cnr"//`  -e package_list_file=package-list
+                """
+            }
+            post {
+                always {
+                   deleteDir()
+                }
+            }
+        }
+        stage('SendNotification') {
+            agent {
+                node {
+                    label 'CINAR_BUILD_NODE_1'
+                }
+            }
+            stages{
+                stage('PR') {
+                    when {expression {return env.CHANGE_TARGET != null}}
+                        steps {
+                            script {
+                                emailext(
+                                    body: """Jenkins Build ${currentBuild.currentResult}: Job ${env.JOB_NAME},
+                                    At: ${env.BUILD_URL}""",
+                                    recipientProviders: [requestor(), culprits()],
+                                    subject: "Jenkins Build ${currentBuild.currentResult}: Job ${env.JOB_NAME}."
+                                )
+                            }
+                        }
+                }
+                stage('Daily') {
+                    environment {
+                    RECIPIENT=[
+                            "ozlem.aydin@ulakhaberlesme.com.tr"
+                            // "cem.topkaya@ulakhaberlesme.com.tr",
+                            // "sertac.keskin@ulakhaberlesme.com.tr",
+                            // "bora.ilgar@ulakhaberlesme.com.tr",
+                            // "hakan.oduncu@ulakhaberlesme.com.tr",
+                            // "sami.gurpinar@ulakhaberlesme.com.tr",
+                        ].join(",");
+                    }
+                    when {expression {return env.CHANGE_TARGET == null}}
+
+                    steps {
+                        sh """#!/bin/bash
+                            git init
+                            echo "<html>" >> commitmessage.html
+                            echo "<header><title> This is the title</title></header>" >> commitmessage.html
+                            echo "<body> Job ${env.JOB_NAME} build ${env.BUILD_NUMBER}\n More info at: ${env.BUILD_URL} </body>" >> commitmessage.html
+                            echo "<body> Commit Autor and Commit Messages </body>" >> commitmessage.html
+                            echo "<body> `git log --format=%B -n 1 \$(git log -1 --pretty=format:"%h") | cat -` </body>" >> commitmessage.html
+                            echo "</html>" >> commitmessage.html
+                            """
+                        script {
+                            def mailRecipients = "${env.RECIPIENT}"
+                            def jobName = currentBuild.fullDisplayName
+                            emailext body: '''${FILE, path="commitmessage.html"}''',
+                                mimeType: 'text/html',
+                                subject: "Jenkins Build ${currentBuild.currentResult}: Job ${env.JOB_NAME}",
+                                to: "${mailRecipients}",
+                                replyTo: "${mailRecipients}",
+                                recipientProviders: [[$class: 'CulpritsRecipientProvider']]
+                        }
+                    }
+                } 
+            }
+            post {
+                always {
+                  deleteDir()
+                }
+            }
+        }
+    }
+}

@@ -1,0 +1,18 @@
+- hosts: all
+  become: yes
+  #gather_facts: false
+  tasks:
+   - name: Remove file
+     ansible.builtin.file:
+       path: /etc/apt/sources.list.d/cinar.list
+       state: absent
+   - name: Added repo adress
+     lineinfile:
+       dest: /etc/apt/sources.list.d/cinar.list
+       line: "{{ item }}"
+       create: yes
+     with_items:
+       - deb [trusted=yes] http://192.168.13.173:8080/repos/thirdparty/ amd64/
+       - deb [trusted=yes] http://192.168.13.173:8080/repos/cinar/ amd64/
+       - deb [trusted=yes] http://192.168.13.173:8080/repos/interworking/ amd64/
+       - deb [trusted=yes] http://192.168.13.173:8080/repos/latest/ amd64/

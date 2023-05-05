@@ -1,0 +1,434 @@
+#!/usr/bin/env groovy
+// Define variables
+List category_list = ["\"Not Installation:selected\"","\"${env.BRANCH_NAME}\"","\"Quick-release\""]
+List debug_item = ["\"Select:selected\"","\"VTO\"","\"RTO\""]
+List release_item = ["\"Select:selected\"","\"STO\"","\"PTO\""]
+List quick_item = ["\"Select:selected\"","\"STO\"","\"PTO\""]
+List default_item = ["\"Not Installation\""]
+String categories = buildScript(category_list)
+String release = buildScript(release_item)
+String debug = buildScript(debug_item)
+String quick = buildScript(quick_item)
+String setups = populateSetups(default_item,debug_item,release_item,quick_item)
+// Methods to build groovy scripts to populate data
+String buildScript(List values){
+  return "return $values"
+}
+String populateSetups(List default_item, List debugList, List releaseList, List quickList){
+return """if(Categories =~ /^developer(.*)/){
+     return $debugList
+     }
+     else if(Categories =~ /^master(.*)/){
+     return $releaseList
+     }
+     else if(Categories.equals('Quick-release')){
+     return $quickList
+     }
+     else{
+     return $default_item
+     }
+     """
+}
+// Properties step to set the Active choice parameters via 
+// Declarative Scripting
+properties([
+    parameters([
+        [$class: 'ChoiceParameter', choiceType: 'PT_SINGLE_SELECT',   name: 'Categories', script: [$class: 'GroovyScript', fallbackScript: [classpath: [], sandbox: false, script: 'return ["ERROR"]'], script: [classpath: [], sandbox: false,
+        script:  categories]]],
+        [$class: 'CascadeChoiceParameter', choiceType: 'PT_SINGLE_SELECT',name: 'Setups', referencedParameters: 'Categories', script: [$class: 'GroovyScript', fallbackScript: [classpath: [], sandbox: false, script: 'return ["error"]'], script: [classpath: [], sandbox: false, script: setups]]]
+    ])
+])
+
+pipeline {
+    agent none
+    parameters {
+        string(name: 'TARGET_MAIN_BRANCH', defaultValue: '', description: 'if you want to merge, please select merge branch (like master, master-async otherwise keep to empty)')
+    }
+    options {
+        buildDiscarder logRotator(
+            daysToKeepStr: '5',
+            numToKeepStr: '5'
+            )
+    }
+    stages {
+      stage('Initialize') {
+           agent {
+               dockerfile {
+               filename 'cinar_build.Dockerfile'
+               dir 'docker'
+               additionalBuildArgs "--add-host=debrepo-cinar.ulakhaberlesme.com.tr:192.168.13.47 --add-host=debrepo.ulakhaberlesme.com.tr:192.168.13.47 --add-host=gitlab.ulakhaberlesme.com.tr:192.168.57.53 --build-arg uid=\$(id -u) --build-arg gid=\$(id -g) --tag cinar-\$(echo $JOB_NAME | awk -F '/' '{print \$1}'):1.0"
+               args "-v /etc/hosts:/etc/hosts --add-host=debrepo.ulakhaberlesme.com.tr:192.168.13.47 --add-host=debrepo-cinar.ulakhaberlesme.com.tr:192.168.13.47"
+               customWorkspace "${env.JOB_NAME}"
+               label "DockerSMF"
+               reuseNode true
+             }
+           }
+             steps {
+                echo 'cinar_build container is up.'
+                deleteDir()
+            }
+         }
+        stage('Continous-Integration-Testing') {
+            agent {
+                dockerfile {
+                filename 'cinar_build.Dockerfile'
+                dir 'docker'
+                additionalBuildArgs "--add-host=debrepo-cinar.ulakhaberlesme.com.tr:192.168.13.47 --add-host=debrepo.ulakhaberlesme.com.tr:192.168.13.47 --add-host=gitlab.ulakhaberlesme.com.tr:192.168.57.53 --build-arg uid=\$(id -u) --build-arg gid=\$(id -g) --tag cinar-\$(echo $JOB_NAME | awk -F '/' '{print \$1}'):1.0"
+                args "-v /etc/hosts:/etc/hosts --add-host=debrepo.ulakhaberlesme.com.tr:192.168.13.47 --add-host=debrepo-cinar.ulakhaberlesme.com.tr:192.168.13.47"
+                label "DockerSMF"
+                reuseNode true
+                }
+            }
+            stages {
+                stage('Main-Build') {
+
+                    when {
+                         expression {return env.CHANGE_TARGET == null}
+                         not { environment name: 'Categories', value: 'Quick-release' }
+                    }
+                    steps {
+                        script {   
+                            echo "${env.Setups}"   
+                            echo "${JOB_NAME}"
+                            if(env.BRANCH_NAME =~ /^developer(.*)/) {
+                            sh '''#!/bin/bash
+                                export CINAR_BASE=/opt/cinar
+                                export CINAR_CODE_GENERATOR_DIR=$CINAR_BASE/bin/ccg
+                                export CINAR_YAML_DIR=${WORKSPACE}/YAML
+                                cp -R /opt/cinar/certificate ${WORKSPACE}
+                                export BUILD_NUMBER=${BUILD_NUMBER}.debug
+                                printenv 
+                                if [[ $(echo $JOB_NAME | awk -F '/' '{print \$1}') == "libcnrsmf-common" ]]; then
+                                  echo "smf common build"
+                                  make dist                        
+                                elif [[ $(echo $JOB_NAME | awk -F '/' '{print \$1}' | sed s/"cnr"//) == "smf" ]]; then
+                                  sudo apt-get update
+                                  VERSION=`apt-cache show libcnrsmf-common | grep Version | cut -d' ' -f2 |  grep debug | head -1`
+                                  sudo apt-get install libcnrsmf-common=$VERSION
+                                  make dist                                 
+                                elif [[ $(echo $JOB_NAME | awk -F '/' '{print \$1}') == "libcnramf-common" ]]; then
+                                  echo "amf common build"
+                                  make dist_debug
+                                elif [[ $(echo $JOB_NAME | awk -F '/' '{print \$1}' | sed s/"cnr"//) == "amf" ]]; then
+                                  sudo service rabbitmq-server start
+                                  sudo apt-get update
+                                  VERSION=`apt-cache show libcnramf-common | grep Version | cut -d' ' -f2 |  grep debug | head -1`
+                                  sudo apt-get install libcnramf-common=$VERSION
+                                  make dist_debug
+                                elif [[ $(echo $JOB_NAME | awk -F '/' '{print \$1}') == "libcnrsmsf-common" ]]; then
+                                  echo "smsf common build"
+                                  make dist_debug
+                                elif [[ $(echo $JOB_NAME | awk -F '/' '{print \$1}' | sed s/"cnr"//) == "smsf" ]]; then
+                                  sudo service rabbitmq-server start
+                                  sudo apt-get update
+                                  VERSION=`apt-cache show libcnrsmsf-common | grep Version | cut -d' ' -f2 |  grep debug | head -1`
+                                  sudo apt-get install libcnrsmsf-common=$VERSION
+                                  make dist_debug
+                                fi
+                                make doc
+                            '''
+                            }
+                            if(env.BRANCH_NAME =~ /^master(.*)/) {
+                            sh '''#!/bin/bash
+                                export CINAR_BASE=/opt/cinar
+                                export CINAR_CODE_GENERATOR_DIR=$CINAR_BASE/bin/ccg
+                                export CINAR_YAML_DIR=${WORKSPACE}/YAML
+                                cp -R /opt/cinar/certificate ${WORKSPACE}
+                                if [[ $(echo $JOB_NAME | awk -F '/' '{print $1}') == "libcnrsmf-common" || $(echo $JOB_NAME | awk -F '/' '{print $1}') == "libcnramf-common" || $(echo $JOB_NAME | awk -F '/' '{print $1}') == "libcnrsmsf-common" ]]; then
+                                  echo "common build"
+                                elif [[ $(echo $JOB_NAME | awk -F '/' '{print \$1}' | sed s/"cnr"//) == "smf" ]]; then
+                                  sudo apt-get update
+                                  VERSION=`apt-cache show libcnrsmf-common | grep Version | cut -d' ' -f2 |  grep -v debug | head -1`
+                                  echo $VERSION
+                                  sudo apt-get install libcnrsmf-common=$VERSION
+                                elif [[ $(echo $JOB_NAME | awk -F '/' '{print \$1}' | sed s/"cnr"//) == "amf" ]]; then
+                                  sudo service rabbitmq-server start
+                                  sudo apt-get update
+                                  VERSION=`apt-cache show libcnramf-common | grep Version | cut -d' ' -f2 |  grep -v debug | head -1`
+                                  echo $VERSION
+                                  sudo apt-get install libcnramf-common=$VERSION
+                                elif [[ $(echo $JOB_NAME | awk -F '/' '{print \$1}' | sed s/"cnr"//) == "smsf" ]]; then
+                                  sudo service rabbitmq-server start
+                                  sudo apt-get update
+                                  VERSION=`apt-cache show libcnrsmsf-common | grep Version | cut -d' ' -f2 |  grep -v debug | head -1`
+                                  echo $VERSION
+                                  sudo apt-get install libcnrsmsf-common=$VERSION
+                                fi
+                                make dist_release
+                            '''
+                            }
+                            if(env.BRANCH_NAME =~ /^nokia(.*)/) {
+                            sh '''#!/bin/bash
+                                export CINAR_BASE=/opt/cinar
+                                export CINAR_CODE_GENERATOR_DIR=$CINAR_BASE/bin/ccg
+                                export CINAR_YAML_DIR=${WORKSPACE}/YAML
+                                cp -R /opt/cinar/certificate ${WORKSPACE}
+                                if [[ $(echo $JOB_NAME | awk -F '/' '{print $1}') == "libcnramf-common-nokia" ]]; then
+                                  echo "common build"
+                                elif [[ $(echo $JOB_NAME | awk -F '/' '{print \$1}' | sed s/"cnr"//) == "amf" ]]; then
+                                 sudo service rabbitmq-server start
+                                  sudo apt-get update
+                                  VERSION=`apt-cache show libcnramf-common-nokia | grep Version | cut -d' ' -f2  | head -1`
+                                  echo $VERSION
+                                  sudo apt-get install libcnramf-common-nokia=$VERSION
+                                fi
+                                make dist_fast
+                            '''
+                            }
+                             if(env.BRANCH_NAME =~ /^TT_Lab_Support(.*)/) {
+                            sh '''#!/bin/bash
+                                export CINAR_BASE=/opt/cinar
+                                export CINAR_CODE_GENERATOR_DIR=$CINAR_BASE/bin/ccg
+                                export CINAR_YAML_DIR=${WORKSPACE}/YAML
+                                cp -R /opt/cinar/certificate ${WORKSPACE}
+                                if [[ $(echo $JOB_NAME | awk -F '/' '{print $1}') == "libcnrsmf-common" || $(echo $JOB_NAME | awk -F '/' '{print $1}') == "libcnramf-common" || $(echo $JOB_NAME | awk -F '/' '{print $1}') == "libcnrsmsf-common" ]]; then
+                                  echo "common build"
+                                elif [[ $(echo $JOB_NAME | awk -F '/' '{print \$1}' | sed s/"cnr"//) == "smf" ]]; then
+                                  sudo apt-get update
+                                  VERSION=`apt-cache show libcnrsmf-common | grep Version | cut -d' ' -f2 |  grep -v debug | head -1`
+                                  echo $VERSION
+                                  sudo apt-get install libcnrsmf-common=$VERSION
+                                elif [[ $(echo $JOB_NAME | awk -F '/' '{print \$1}' | sed s/"cnr"//) == "amf" ]]; then
+                                  sudo service rabbitmq-server start
+                                  sudo apt-get update
+                                  VERSION=`apt-cache show libcnramf-common | grep Version | cut -d' ' -f2 |  grep -v debug | head -1`
+                                  echo $VERSION
+                                  sudo apt-get install libcnramf-common=$VERSION
+                                elif [[ $(echo $JOB_NAME | awk -F '/' '{print \$1}' | sed s/"cnr"//) == "smsf" ]]; then
+                                  sudo service rabbitmq-server start
+                                  sudo apt-get update
+                                  VERSION=`apt-cache show libcnrsmsf-common | grep Version | cut -d' ' -f2 |  grep -v debug | head -1`
+                                  echo $VERSION
+                                  sudo apt-get install libcnrsmsf-common=$VERSION
+                                fi
+                                make dist_release
+                            '''
+                            }                                                  
+                        }
+                    }
+                }
+                stage ('Quick-Release') {
+
+                    when {
+                         expression {return env.CHANGE_TARGET == null}
+                         environment name: 'Categories', value: 'Quick-release' 
+                    }
+                    steps {
+                        script {   
+                            echo "${env.Setups}"   
+                            echo "${JOB_NAME}"
+                            if(env.BRANCH_NAME =~ /^developer(.*)/) {
+                            sh '''#!/bin/bash
+                                export CINAR_BASE=/opt/cinar
+                                export CINAR_CODE_GENERATOR_DIR=$CINAR_BASE/bin/ccg
+                                export CINAR_YAML_DIR=${WORKSPACE}/YAML
+                                cp -R /opt/cinar/certificate ${WORKSPACE}
+                                if [[ $(echo $JOB_NAME | awk -F '/' '{print $1}') == "libcnrsmf-common" || $(echo $JOB_NAME | awk -F '/' '{print $1}') == "libcnramf-common" || $(echo $JOB_NAME | awk -F '/' '{print $1}') == "libcnrsmsf-common" ]]; then
+                                  echo "common build"
+                                elif [[ $(echo $JOB_NAME | awk -F '/' '{print \$1}' | sed s/"cnr"//) == "smf" ]]; then
+                                  sudo apt-get update
+                                  VERSION=`apt-cache show libcnrsmf-common | grep Version | cut -d' ' -f2 |  grep -v debug | head -1`
+                                  echo $VERSION
+                                  sudo apt-get install libcnrsmf-common=$VERSION
+                                elif [[ $(echo $JOB_NAME | awk -F '/' '{print \$1}' | sed s/"cnr"//) == "amf" ]]; then
+                                  sudo service rabbitmq-server start
+                                  sudo apt-get update
+                                  VERSION=`apt-cache show libcnramf-common | grep Version | cut -d' ' -f2 |  grep -v debug | head -1`
+                                  echo $VERSION
+                                  sudo apt-get install libcnramf-common=$VERSION
+                                elif [[ $(echo $JOB_NAME | awk -F '/' '{print \$1}' | sed s/"cnr"//) == "smsf" ]]; then
+                                  sudo service rabbitmq-server start
+                                  sudo apt-get update
+                                  VERSION=`apt-cache show libcnrsmsf-common | grep Version | cut -d' ' -f2 |  grep -v debug | head -1`
+                                  echo $VERSION
+                                  sudo apt-get install libcnrsmsf-common=$VERSION
+                                fi
+                                make dist_release
+                            '''
+                            }
+                            if(env.BRANCH_NAME =~ /^TT_Lab_Support(.*)/) {
+                            sh '''#!/bin/bash
+                                export CINAR_BASE=/opt/cinar
+                                export CINAR_CODE_GENERATOR_DIR=$CINAR_BASE/bin/ccg
+                                export CINAR_YAML_DIR=${WORKSPACE}/YAML
+                                cp -R /opt/cinar/certificate ${WORKSPACE}
+                                if [[ $(echo $JOB_NAME | awk -F '/' '{print $1}') == "libcnrsmf-common" || $(echo $JOB_NAME | awk -F '/' '{print $1}') == "libcnramf-common" || $(echo $JOB_NAME | awk -F '/' '{print $1}') == "libcnrsmsf-common" ]]; then
+                                  echo "common build"
+                                elif [[ $(echo $JOB_NAME | awk -F '/' '{print \$1}' | sed s/"cnr"//) == "smf" ]]; then
+                                  sudo apt-get update
+                                  VERSION=`apt-cache show libcnrsmf-common | grep Version | cut -d' ' -f2 |  grep -v debug | head -1`
+                                  echo $VERSION
+                                  sudo apt-get install libcnrsmf-common=$VERSION
+                                elif [[ $(echo $JOB_NAME | awk -F '/' '{print \$1}' | sed s/"cnr"//) == "amf" ]]; then
+                                  sudo service rabbitmq-server start
+                                  sudo apt-get update
+                                  VERSION=`apt-cache show libcnramf-common | grep Version | cut -d' ' -f2 |  grep -v debug | head -1`
+                                  echo $VERSION
+                                  sudo apt-get install libcnramf-common=$VERSION
+                                elif [[ $(echo $JOB_NAME | awk -F '/' '{print \$1}' | sed s/"cnr"//) == "smsf" ]]; then
+                                  sudo service rabbitmq-server start
+                                  sudo apt-get update
+                                  VERSION=`apt-cache show libcnrsmsf-common | grep Version | cut -d' ' -f2 |  grep -v debug | head -1`
+                                  echo $VERSION
+                                  sudo apt-get install libcnrsmsf-common=$VERSION
+                                fi
+                                make dist_release
+                            '''
+                            }                       
+                        }
+                    }
+                }
+                stage ('PR-Build') {
+
+                    when {expression {return env.CHANGE_TARGET != null}}
+
+                    steps {
+                        script {           
+                            if(env.CHANGE_TARGET =~ /^developer(.*)/) {
+                            sh '''#!/bin/bash
+                                export CINAR_BASE=/opt/cinar
+                                export CINAR_CODE_GENERATOR_DIR=$CINAR_BASE/bin/ccg
+                                export CINAR_YAML_DIR=${WORKSPACE}/YAML
+                                if [[ $(echo $JOB_NAME | awk -F '/' '{print $1}') == "libcnrsmf-common" ]]; then
+                                  echo "smf common PR build"
+                                  make clean
+                                  make .cppcheck.done 
+                                  make test
+                                elif [[ $(echo $JOB_NAME | awk -F '/' '{print $1}') == "libcnramf-common" ]]; then
+                                  echo "amf common PR build"
+                                  make clean
+                                  make debug
+                                  make test
+                                elif [[ $(echo $JOB_NAME | awk -F '/' '{print $1}') == "libcnrsmsf-common" ]]; then
+                                  echo "smsf common PR build"
+                                  make clean
+                                  make debug
+                                  make test
+                                elif [[ $(echo $JOB_NAME | awk -F '/' '{print \$1}' | sed s/"cnr"//) == "smf" ]]; then
+                                  sudo apt-get update
+                                  VERSION=`apt-cache show libcnrsmf-common | grep Version | cut -d' ' -f2 |  grep debug | head -1`
+                                  echo $VERSION
+                                  sudo apt-get install libcnrsmf-common=$VERSION
+                                  make clean
+                                  make .cppcheck.done 
+                                  make test
+                                elif [[ $(echo $JOB_NAME | awk -F '/' '{print \$1}' | sed s/"cnr"//) == "amf" ]]; then
+                                  sudo service rabbitmq-server start
+                                  sudo apt-get update
+                                  VERSION=`apt-cache show libcnramf-common | grep Version | cut -d' ' -f2 |  grep debug | head -1`
+                                  echo $VERSION
+                                  sudo apt-get install libcnramf-common=$VERSION
+                                  make clean
+                                  make debug
+                                  make test
+                                elif [[ $(echo $JOB_NAME | awk -F '/' '{print \$1}' | sed s/"cnr"//) == "smsf" ]]; then
+                                  sudo service rabbitmq-server start
+                                  sudo apt-get update
+                                  VERSION=`apt-cache show libcnrsmsf-common | grep Version | cut -d' ' -f2 |  grep debug | head -1`
+                                  echo $VERSION
+                                  sudo apt-get install libcnrsmsf-common=$VERSION
+                                  make clean
+                                  make debug
+                                  make test
+                                fi
+                            '''
+                            }
+                            if(env.CHANGE_TARGET =~ /^TT_Lab_Support(.*)/) {
+                            sh '''#!/bin/bash
+                                export CINAR_BASE=/opt/cinar
+                                export CINAR_CODE_GENERATOR_DIR=$CINAR_BASE/bin/ccg
+                                export CINAR_YAML_DIR=${WORKSPACE}/YAML
+                                if [[ $(echo $JOB_NAME | awk -F '/' '{print $1}') == "libcnrsmf-common" ]]; then
+                                  echo "smf common PR build"
+                                  make clean
+                                  make .cppcheck.done 
+                                  make test
+                                elif [[ $(echo $JOB_NAME | awk -F '/' '{print $1}') == "libcnramf-common" ]]; then
+                                  echo "amf common PR build"
+                                  make clean
+                                  make debug
+                                  make test
+                                elif [[ $(echo $JOB_NAME | awk -F '/' '{print $1}') == "libcnrsmsf-common" ]]; then
+                                  echo "smsf common PR build"
+                                  make clean
+                                  make debug
+                                  make test
+                                elif [[ $(echo $JOB_NAME | awk -F '/' '{print \$1}' | sed s/"cnr"//) == "smf" ]]; then
+                                  sudo apt-get update
+                                  VERSION=`apt-cache show libcnrsmf-common | grep Version | cut -d' ' -f2 |  grep debug | head -1`
+                                  echo $VERSION
+                                  sudo apt-get install libcnrsmf-common=$VERSION
+                                  make clean
+                                  make .cppcheck.done 
+                                  make test
+                                elif [[ $(echo $JOB_NAME | awk -F '/' '{print \$1}' | sed s/"cnr"//) == "amf" ]]; then
+                                  sudo service rabbitmq-server start
+                                  sudo apt-get update
+                                  VERSION=`apt-cache show libcnramf-common | grep Version | cut -d' ' -f2 |  grep debug | head -1`
+                                  echo $VERSION
+                                  sudo apt-get install libcnramf-common=$VERSION
+                                  make clean
+                                  make debug
+                                  make test
+                                elif [[ $(echo $JOB_NAME | awk -F '/' '{print \$1}' | sed s/"cnr"//) == "smsf" ]]; then
+                                  sudo service rabbitmq-server start
+                                  sudo apt-get update
+                                  VERSION=`apt-cache show libcnrsmsf-common | grep Version | cut -d' ' -f2 |  grep debug | head -1`
+                                  echo $VERSION
+                                  sudo apt-get install libcnrsmsf-common=$VERSION
+                                  make clean
+                                  make debug
+                                  make test
+                                fi
+                            '''
+                            }
+                            if(env.BRANCH_NAME =~ /^nokia(.*)/) {
+                            sh '''#!/bin/bash
+                                export CINAR_BASE=/opt/cinar
+                                export CINAR_CODE_GENERATOR_DIR=$CINAR_BASE/bin/ccg
+                                export CINAR_YAML_DIR=${WORKSPACE}/YAML
+                                cp -R /opt/cinar/certificate ${WORKSPACE}
+                                if [[ $(echo $JOB_NAME | awk -F '/' '{print $1}') == "libcnramf-common-nokia" ]]; then
+                                  echo "common build"
+                                elif [[ $(echo $JOB_NAME | awk -F '/' '{print \$1}' | sed s/"cnr"//) == "amf" ]]; then
+                                  sudo service rabbitmq-server start
+                                  sudo apt-get update
+                                  VERSION=`apt-cache show libcnramf-common-nokia | grep Version | cut -d' ' -f2  | head -1`
+                                  echo $VERSION
+                                  sudo apt-get install libcnramf-common-nokia=$VERSION
+                                fi
+                                  make clean
+                                  make debug
+                                  make test
+                            '''
+                            }
+                        }
+                    }
+                }
+                stage('Upload-Artifact') {
+                    when {expression {return env.CHANGE_TARGET == null}}
+                    steps {
+                        script {
+                            sh """#!/bin/bash
+                                rsync -avz --rsh="/usr/bin/sshpass -p "724365" ssh -o StrictHostKeyChecking=no -l root" /opt/cinar/packages/ ubuntu@192.168.13.47:/debrepo/CNF
+                            """
+                            sh """#!/bin/bash
+                                rsync -avz --rsh="/usr/bin/sshpass -p "724365" ssh -o StrictHostKeyChecking=no -l root" /opt/cinar/packages/ ubuntu@192.168.13.47:/debrepo/test
+                            """
+                          if(env.BRANCH_NAME =~ /^nokia(.*)/) {
+                                sh """#!/bin/bash
+                                   rsync -avz --rsh="/usr/bin/sshpass -p "724365" ssh -o StrictHostKeyChecking=no -l root" /opt/cinar/packages/ ubuntu@192.168.13.47:/debrepo/xenial/nokia
+                                """
+                            }
+                        }
+                    }
+                }
+            }
+            post {
+                always {
+                    deleteDir()
+                }
+            }
+        }
+    }
+}

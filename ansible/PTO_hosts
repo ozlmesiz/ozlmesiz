@@ -1,0 +1,68 @@
+[nrf1]
+10.10.44.8  ansible_ssh_user=cnrusr ansible_ssh_pass=P5vKG6vE
+[nrf2]
+10.10.44.191  ansible_ssh_user=ubuntu ansible_ssh_pass=test123
+
+[nrf:children]
+nrf1
+nrf2
+
+[udr]
+10.10.44.121 ansible_ssh_user=cnrusr ansible_ssh_pass=P5vKG6vE
+
+[udm]
+10.10.44.194 ansible_ssh_user=cnrusr ansible_ssh_pass=P5vKG6vE
+
+[amf]
+10.10.44.94 ansible_ssh_user=cnrusr ansible_ssh_pass=P5vKG6vE
+
+[smf]
+10.10.44.29 ansible_ssh_user=cnrusr ansible_ssh_pass=P5vKG6vE
+
+[ausf]
+10.10.44.196 ansible_ssh_user=cnrusr ansible_ssh_pass=P5vKG6vE
+
+[pcf]
+10.10.44.68 ansible_ssh_user=cnrusr ansible_ssh_pass=P5vKG6vE
+
+[nssf]
+10.10.44.52 ansible_ssh_user=cnrusr ansible_ssh_pass=P5vKG6vE
+
+[upf]
+10.10.44.99 ansible_ssh_user=cnrusr ansible_ssh_pass=P5vKG6vE
+
+[ims-tas]
+10.10.44.192 ansible_ssh_user=cnrusr ansible_ssh_pass=P5vKG6vE
+
+[ims-pcscf]
+10.10.44.39 ansible_ssh_user=cnrusr ansible_ssh_pass=P5vKG6vE
+10.10.44.133 ansible_ssh_user=cnrusr ansible_ssh_pass=P5vKG6vE
+
+[ims-scscf]
+10.10.44.36 ansible_ssh_user=cnrusr ansible_ssh_pass=P5vKG6vE
+
+[ims-icscf]
+10.10.44.202 ansible_ssh_user=cnrusr ansible_ssh_pass=P5vKG6vE
+
+[ims-mrf]
+10.10.44.155 ansible_ssh_user=cnrusr ansible_ssh_pass=P5vKG6vE
+
+[pto:children]
+udr
+udm
+amf
+smf
+ausf
+pcf
+nssf
+upf
+ims-tas
+ims-pcscf
+ims-scscf
+ims-icscf
+ims-mrf
+
+[envovergw_pto:children]
+pto
+nrf
+

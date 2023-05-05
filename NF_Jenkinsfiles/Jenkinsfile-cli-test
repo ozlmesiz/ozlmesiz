@@ -1,0 +1,107 @@
+#!/usr/bin/env groovy
+// Define variables
+List category_list = ["\"Not Installation:selected\"","\"${env.BRANCH_NAME}\""]
+List debug_item = ["\"Select:selected\"","\"VTO\"","\"RTO\""]
+List release_item = ["\"Select:selected\"","\"STO\"","\"PTO\""]
+List default_item = ["\"Not Installation\""]
+String categories = buildScript(category_list)
+String release = buildScript(release_item)
+String debug = buildScript(debug_item)
+String setups = populateSetups(default_item,debug_item,release_item)
+// Methods to build groovy scripts to populate data
+String buildScript(List values){
+  return "return $values"
+}
+String populateSetups(List default_item, List debugList, List releaseList){
+return """if(Categories =~ /^developer(.*)/){
+     return $debugList
+     }
+     else if(Categories =~ /^master(.*)/){
+     return $releaseList
+     }
+     else{
+     return $default_item
+     }
+     """
+}
+// Properties step to set the Active choice parameters via 
+// Declarative Scripting
+properties([
+    parameters([
+        [$class: 'ChoiceParameter', choiceType: 'PT_SINGLE_SELECT',   name: 'Categories', script: [$class: 'GroovyScript', fallbackScript: [classpath: [], sandbox: false, script: 'return ["ERROR"]'], script: [classpath: [], sandbox: false,
+        script:  categories]]],
+        [$class: 'CascadeChoiceParameter', choiceType: 'PT_SINGLE_SELECT',name: 'Setups', referencedParameters: 'Categories', script: [$class: 'GroovyScript', fallbackScript: [classpath: [], sandbox: false, script: 'return ["error"]'], script: [classpath: [], sandbox: false, script: setups]]]
+    ])
+])
+
+pipeline {
+    agent none
+    parameters {
+        string(name: 'TARGET_MAIN_BRANCH', defaultValue: '', description: 'if you want to merge, please select merge branch (like master, master-async otherwise keep to empty)')
+    }
+    options {
+        buildDiscarder logRotator(
+            daysToKeepStr: '5',
+            numToKeepStr: '5'
+            )
+    }
+    stages {
+        stage('Continous-Integration-Testing') {
+            agent {
+                dockerfile {
+                filename 'cinar_build.Dockerfile'
+                dir 'docker'
+                additionalBuildArgs "--add-host=debrepo-cinar.ulakhaberlesme.com.tr:192.168.13.47 --add-host=debrepo.ulakhaberlesme.com.tr:192.168.13.47 --add-host=gitlab.ulakhaberlesme.com.tr:192.168.57.53 --build-arg uid=\$(id -u) --build-arg gid=\$(id -g) --tag cinar-\$(echo $JOB_NAME | awk -F '/' '{print \$1}'):1.0"
+                args "-v /etc/hosts:/etc/hosts --add-host=debrepo.ulakhaberlesme.com.tr:192.168.13.47 --add-host=debrepo-cinar.ulakhaberlesme.com.tr:192.168.13.47"
+                label "DockerPCF"
+                reuseNode true
+                }
+            }
+            stages {
+                stage('Main-Build') {
+                    steps {
+                        script {   
+                            echo "${env.Setups}"   
+                            echo "${JOB_NAME}"
+                            if(env.BRANCH_NAME =~ /^developer(.*)/) {
+                            sh '''#!/bin/bash
+                                export CINAR_BASE=/opt/cinar
+                                cp -R /opt/cinar/certificate ${WORKSPACE}
+                                printenv                        
+                                make 
+                            '''
+                            }
+                            if(env.BRANCH_NAME =~ /^master(.*)/) {
+                            sh '''#!/bin/bash
+                                export CINAR_BASE=/opt/cinar
+                                cp -R /opt/cinar/certificate ${WORKSPACE}
+                                make 
+                            '''
+                            }
+
+                                                  
+                        }
+                    }
+                }    
+                
+                stage('Upload-Artifact') {
+                    when {expression {return env.CHANGE_TARGET == null}}
+                    steps {
+                        script {
+                            sh """#!/bin/bash
+                                rsync -avz --rsh="/usr/bin/sshpass -p "724365" ssh -o StrictHostKeyChecking=no -l root" /opt/cinar/packages/ ubuntu@192.168.13.47:/home/ubuntu/docker/ulak-aptly/volume/incoming/xenial-unstable
+                            """
+
+                            }
+                        }
+                    }
+                }
+            
+            post {
+                always {
+                    deleteDir()
+                }
+            }
+        }
+    }
+}

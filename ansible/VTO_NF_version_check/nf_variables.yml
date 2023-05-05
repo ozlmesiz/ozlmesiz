@@ -1,0 +1,48 @@
+# nrf variables
+nrf_package_names: [cnrnrf]
+
+# nssf variables
+nssf_package_names: [cnrnssf]
+
+# nef variables
+nef_package_names: [cnrnef]
+
+# udr variables
+udr_package_names: [libcnrcommon,libcnrhttp1,libcnrhttp2,libcnr5gmessages,cnrudr,cnrudr-cli]
+
+# udm variables
+udm_package_names: [cnrudm,cnrudm-cli]
+
+# ausf variables
+ausf_package_names: [cnrausf,cnrausf-cli]
+
+# amf variables
+amf_package_names: [libcnramf-common,cnramf]
+
+# smf variables
+smf_package_names: [cnrsmf]
+
+# upf variables
+upf_package_names: [cnrupf]
+
+# pcf variables
+pcf_package_names: [libcnrpcfcommon,cnrpcfcs,cnrpcfiws,cnrpcfsms,cnrpcfams,cnrpcfnfrs,cnrpcfpes,cnrpcfoms]
+
+# smsf variables
+smsf_package_names: [libcnrsmf-common,cnrsmsf]
+
+imspcscf_package_names: [cinar-pcscf]
+
+imsicscf_package_names: [cinar-icscf]
+
+imsscscf_package_names: [cinar-scscf]
+
+imsmrf_package_names: [cinar-mrf]
+
+imstas_package_names: [cinar-tas]
+
+imsipsmgw_package_names: [cinar-ipsmgw]
+
+imsecscf_package_names: [cinar-ecscf]
+
+imsbgcf_package_names: [cinar-bgcf]

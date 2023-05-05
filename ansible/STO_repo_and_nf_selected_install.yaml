@@ -1,0 +1,350 @@
+- hosts: all
+  become: yes
+  #gather_facts: false
+  ##package_list_file extra_variable olarak playbook calistirilirken verilmelidir.(sto-skt-package-list,sto-fkt-package-list)
+  #package_type ve test_type extra_variable olarak tanımlanmalı (package_type=debug,release test_type=fkt,skt)
+  tasks:
+   - name: Remove file
+     ansible.builtin.file:
+       path: /etc/apt/sources.list.d/cinar.list
+       state: absent
+   - name: Added repo adress
+     blockinfile:
+       dest: /etc/apt/sources.list.d/cinar.list
+       create: yes
+       block: |
+         deb [trusted=yes] http://192.168.13.173:8080/repos/{{ item.pt }}/{{ item.tt }}/ amd64/
+         deb [trusted=yes] http://192.168.13.173:8080/repos/thirdparty/ amd64/
+         deb [trusted=yes] http://192.168.13.173:8080/repos/latest/ amd64/
+         deb [trusted=yes] http://192.168.13.173:8080/repos/interworking/ amd64/
+     when: package_type is defined and test_type is defined
+     with_items:
+       - { pt: "{{ package_type }}", tt: "{{ test_type }}" }
+   - name: remove marker line
+     lineinfile:
+       dest: /etc/apt/sources.list.d/cinar.list
+       state: absent
+       regexp: '^#'
+   - name: clean cache
+     command: apt clean
+   - name: update cache
+     command: apt update
+     ignore_errors: yes 
+   - name: pcf packages install to pcf nodes
+     apt:
+      name: "{{ item }}"
+      allow_unauthenticated: yes
+      force: yes
+     when: 
+       - inventory_hostname in groups['pcf'] 
+       - item is search("pcf")
+     with_lines: cat ./{{ package_list_file }}
+     ignore_errors: yes 
+   
+   - name: smf package install to smf nodes
+     apt:
+      name: "{{ item }}"
+      allow_unauthenticated: yes
+      force: yes
+     when:
+       - inventory_hostname in groups['smf']
+       - item is search("smf")
+     with_lines: cat ./{{ package_list_file }}
+     ignore_errors: yes 
+
+   - name: nrf package install to nrf nodes
+     apt:
+      name: "{{ item }}"
+      allow_unauthenticated: yes
+      force: yes
+     when:
+       - inventory_hostname in groups['nrf']
+       - item is search("nrf")
+     with_lines: cat ./{{ package_list_file }}
+     ignore_errors: yes 
+
+   - name: nef package install to nef nodes
+     apt:
+      name: "{{ item }}"
+      allow_unauthenticated: yes
+      force: yes
+     when:
+       - inventory_hostname in groups['nef']
+       - item is search("nef")
+     with_lines: cat ./{{ package_list_file }}
+     ignore_errors: yes 
+
+   - name: nssf package install to nssf nodes
+     apt:
+      name: "{{ item }}"
+      allow_unauthenticated: yes
+      force: yes
+     when:
+       - inventory_hostname in groups['nssf']
+       - item is search("nssf")
+     with_lines: cat ./{{ package_list_file }}
+     ignore_errors: yes 
+
+   - name: amf package install to amf nodes
+     apt:
+      name: "{{ item }}"
+      allow_unauthenticated: yes
+      force: yes
+     when:
+       - inventory_hostname in groups['amf']
+       - item is search("amf")
+     with_lines: cat ./{{ package_list_file }}
+     ignore_errors: yes 
+
+   - name: upf package install to upf nodes
+     apt:
+      name: "{{ item }}"
+      allow_unauthenticated: yes
+      force: yes
+     when:
+       - inventory_hostname in groups['upf']
+       - item is search("upf")
+     with_lines: cat ./{{ package_list_file }}
+     ignore_errors: yes 
+
+   - name: udm package install to udm nodes
+     apt:
+      name: "{{ item }}"
+      allow_unauthenticated: yes
+      force: yes
+     when:
+       - inventory_hostname in groups['udm']
+       - item is search("libcnr5gmessages") or item is search("libcnrcommon") or item is search("libcnrhttp1") or item is search("libcnrhttp2") or item is search("udm")
+     with_lines: cat ./{{ package_list_file }}
+     ignore_errors: yes 
+
+   - name: udr package install to udr nodes
+     apt:
+      name: "{{ item }}"
+      allow_unauthenticated: yes
+      force: yes
+     when:
+       - inventory_hostname in groups['udr']
+       - item is search("libcnr5gmessages") or item is search("libcnrcommon") or item is search("libcnrhttp1") or item is search("libcnrhttp2") or item is search("udr")
+     with_lines: cat ./{{ package_list_file }}
+     ignore_errors: yes 
+   - name: ausf package install to ausf nodes
+     apt:
+      name: "{{ item }}"
+      allow_unauthenticated: yes
+      force: yes
+     when:
+       - inventory_hostname in groups['ausf']
+       - item is search("libcnr5gmessages") or item is search("libcnrcommon") or item is search("libcnrhttp1") or item is search("libcnrhttp2") or item is search("ausf")  
+     with_lines: cat ./{{ package_list_file }}
+     ignore_errors: yes 
+     
+   - name: cinar-tas package install to ims-tas nodes
+     apt:
+      name: "{{ item }}"
+      allow_unauthenticated: yes
+      force: yes
+     when:
+       - inventory_hostname in groups['ims-tas']
+       - item is search("cinar-tas")
+     with_lines: cat ./{{ package_list_file }}
+     ignore_errors: yes 
+    
+   - name: cinar-pcscf package install to ims-pcscf nodes
+     apt:
+      name: "{{ item }}"
+      allow_unauthenticated: yes
+      force: yes
+     when:
+       - inventory_hostname in groups['ims-pcscf']
+       - item is search("cinar-pcscf")
+     with_lines: cat ./{{ package_list_file }}
+     ignore_errors: yes 
+     
+   - name: cinar-ecscf package install to ims-ecscf nodes
+     apt:
+      name: "{{ item }}"
+      allow_unauthenticated: yes
+      force: yes
+     when:
+       - inventory_hostname in groups['ims-ecscf']
+       - item is search("cinar-ecscf")
+     with_lines: cat ./{{ package_list_file }}
+     ignore_errors: yes 
+     
+   - name: cinar-scscf package install to ims-scscf nodes
+     apt:
+      name: "{{ item }}"
+      allow_unauthenticated: yes
+      force: yes
+     when:
+       - inventory_hostname in groups['ims-scscf']
+       - item is search("cinar-scscf")
+     with_lines: cat ./{{ package_list_file }}
+     ignore_errors: yes    
+     
+   - name: cinar-bgcf package install to ims-bgcf nodes
+     apt:
+      name: "{{ item }}"
+      allow_unauthenticated: yes
+      force: yes
+     when:
+       - inventory_hostname in groups['ims-bgcf']
+       - item is search("cinar-bgcf")
+     with_lines: cat ./{{ package_list_file }}
+     ignore_errors: yes 
+     
+   - name: cinar-icscf package install to ims-icscf nodes
+     apt:
+      name: "{{ item }}"
+      allow_unauthenticated: yes
+      force: yes
+     when:
+       - inventory_hostname in groups['ims-icscf']
+       - item is search("cinar-icscf")
+     with_lines: cat ./{{ package_list_file }}
+     ignore_errors: yes 
+     
+   - name: cinar-mrf package install to ims-mrf nodes
+     apt:
+      name: "{{ item }}"
+      allow_unauthenticated: yes
+      force: yes
+     when:
+       - inventory_hostname in groups['ims-mrf']
+       - item is search("cinar-mrf")
+     with_lines: cat ./{{ package_list_file }}
+     ignore_errors: yes
+  
+   - name: cinar-ipsmgw package install to ims-ipsmgw nodes
+     apt:
+      name: "{{ item }}"
+      allow_unauthenticated: yes
+      force: yes
+     when:
+       - inventory_hostname in groups['ims-ipsmgw']
+       - item is search("cinar-ipsmgw")
+     with_lines: cat ./{{ package_list_file }}
+     ignore_errors: yes 
+    
+   - name: cnridms package install to mc-csc-01 nodes
+     apt:
+      name: "{{ item }}"
+      allow_unauthenticated: yes
+      force: yes
+     when:
+       - inventory_hostname in groups['mc-csc-01']
+       - item is search("cnridms")
+     with_lines: cat ./{{ package_list_file }}
+     ignore_errors: yes 
+     
+   - name: cnrcms package install to mc-csc-02 nodes
+     apt:
+      name: "{{ item }}"
+      allow_unauthenticated: yes
+      force: yes
+     when:
+       - inventory_hostname in groups['mc-csc-02']
+       - item is search("cnrcms")
+     with_lines: cat ./{{ package_list_file }}
+     ignore_errors: yes 
+     
+   - name: cnrgms package install to mc-csc-03 nodes
+     apt:
+      name: "{{ item }}"
+      allow_unauthenticated: yes
+      force: yes
+     when:
+       - inventory_hostname in groups['mc-csc-03']
+       - item is search("cnrgms")
+     with_lines: cat ./{{ package_list_file }}
+     ignore_errors: yes 
+     
+   - name: cnrmcdatacontrolling package install to mcx_server_03 nodes
+     apt:
+      name: "{{ item }}"
+      allow_unauthenticated: yes
+      force: yes
+     when:
+       - inventory_hostname in groups['mcx-server-03']
+       - item is search("cnrmcdatacontrolling")
+     with_lines: cat ./{{ package_list_file }}
+     ignore_errors: yes 
+     
+   - name: cnrmcdataparticipating package install to mcx-server-03 nodes
+     apt:
+      name: "{{ item }}"
+      allow_unauthenticated: yes
+      force: yes
+     when:
+       - inventory_hostname in groups['mcx-server-03']
+       - item is search("cnrmcdataparticipating")
+     with_lines: cat ./{{ package_list_file }}
+     ignore_errors: yes 
+     
+   - name: cnrmcdatalmrgateway package install to mcx-server-03 nodes
+     apt:
+      name: "{{ item }}"
+      allow_unauthenticated: yes
+      force: yes
+     when:
+       - inventory_hostname in groups['mcx-server-03']
+       - item is search("cnrmcdatalmrgateway")
+     with_lines: cat ./{{ package_list_file }}
+     ignore_errors: yes 
+      
+   - name: cnrmcpttcontrolling package install to mcx-server-01 nodes
+     apt:
+      name: "{{ item }}"
+      allow_unauthenticated: yes
+      force: yes
+     when:
+       - inventory_hostname in groups['mcx-server-01']
+       - item is search("cnrmcpttcontrolling")
+     with_lines: cat ./{{ package_list_file }}
+     ignore_errors: yes 
+     
+   - name: cnrmcpttparticipating package install to mcx-server-01 nodes
+     apt:
+      name: "{{ item }}"
+      allow_unauthenticated: yes
+      force: yes
+     when:
+       - inventory_hostname in groups['mcx-server-01']
+       - item is search("cnrmcpttparticipating")
+     with_lines: cat ./{{ package_list_file }}
+     ignore_errors: yes 
+     
+   - name: cnrmcconfig package install to mcx-server-02b nodes
+     apt:
+      name: "{{ item }}"
+      allow_unauthenticated: yes
+      force: yes
+     when:
+       - inventory_hostname in groups['mcx-server-02b']
+       - item is search("cnrmcconfig")
+     with_lines: cat ./{{ package_list_file }}
+     ignore_errors: yes 
+     
+   - name: cnrmcfloorcontrol package install to mcx-server-01b nodes
+     apt:
+      name: "{{ item }}"
+      allow_unauthenticated: yes
+      force: yes
+     when:
+       - inventory_hostname in groups['mcx-server-01b']
+       - item is search("cnrmcfloorcontrol")
+     with_lines: cat ./{{ package_list_file }}
+     ignore_errors: yes 
+     
+   - name: cnrmediaproxy package install to mcx-server-01a nodes
+     apt:
+      name: "{{ item }}"
+      allow_unauthenticated: yes
+      force: yes
+     when:
+       - inventory_hostname in groups['mcx-server-01a']
+       - item is search("cnrmediaproxy")
+     with_lines: cat ./{{ package_list_file }}
+     ignore_errors: yes 
+     

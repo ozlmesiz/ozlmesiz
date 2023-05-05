@@ -1,0 +1,11 @@
+- name: "sourcelist get"
+  ansible.builtin.command: cat /etc/apt/sources.list.d/cinar.list 2>/dev/null
+  register: sourcelist
+  failed_when: "'FAIL' in sourcelist.stderr"
+- name: "write {{ nf_ipadress }} to file"  
+  lineinfile:
+           line: "{{ nf_ipadress}}\n{{ sourcelist.stdout }}"
+           insertafter: EOF
+           dest: sourcelist.txt
+           state: present
+  delegate_to: 127.0.0.1 

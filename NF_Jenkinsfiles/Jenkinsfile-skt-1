@@ -1,0 +1,8 @@
+        stage('Rename Tag') {
+            steps {
+                sh 'git tag -d my-tag'
+                sh 'git tag my-new-tag'
+                sh 'git push origin :refs/tags/my-tag'
+                sh 'git push origin my-new-tag'
+            }
+        }

@@ -1,0 +1,221 @@
+#!/usr/bin/env groovy
+pipeline {
+    agent none
+    environment {
+    TARGET_MAIN_BRANCH="master"
+    }
+    parameters {
+        string(name: 'NF_NAME', defaultValue: '', description: 'NF name')
+        // NF name makefile'lar içerisinden okunabilir ama okunacak file path standart olmalı.
+        //debug ve release build'ler tek bir job içerisinde paralel şekilde alınabilir. Böylece versiyon numaraları aynı sadece debug olan .debug ile ayrılır.
+        // farklı node'lar içerisinde build alınır.
+        string(name: 'BUILD_MODE', defaultValue: 'debug', description: 'debug or release,fast')
+        booleanParam(name: 'INSTALLATION', defaultValue: false, description: 'package installation to test environment')
+    }
+
+    options {
+        buildDiscarder logRotator(
+            daysToKeepStr: '5',
+            numToKeepStr: '5'
+            )
+    }
+    stages {
+        stage('Initialize') {
+            agent {
+            dockerfile {
+              filename 'cinar_build.Dockerfile'
+              dir 'docker'
+              additionalBuildArgs '--add-host=bitbucket.ulakhaberlesme.com.tr:192.168.10.14 --build-arg uid=$(id -u) --build-arg gid=$(id -g) --tag cinar_nrf_build:1.0'
+              customWorkspace "${env.JOB_NAME}/${params.BUILD_MODE}"
+              //label 'CINAR_BUILD_NODE_1'
+              reuseNode true
+            }
+          }
+          steps {
+            echo 'cinar_build container is up.'
+             deleteDir()
+          }
+        }
+        stage('Continous-Integration-Testing') {
+            agent {
+                docker {
+                    image 'cinar_nrf_build:1.0'
+                    args '--add-host bitbucket.ulakhaberlesme.com.tr:192.168.10.14'
+                    customWorkspace "${env.JOB_NAME}"
+                    reuseNode true
+                }
+            }
+            stages {
+                // stage('Build') {
+                //     steps {
+                //         dir('YAML'){
+                //             checkout([$class: 'GitSCM',
+                //             branches: [[name: '*/master']],
+                //             extensions: [[$class: 'CleanBeforeCheckout']],
+                //             userRemoteConfigs: [[
+                //             credentialsId: '7267ca7d-ae35-456c-9732-4c84b1d2c715',
+                //             url: 'https://bitbucket.ulakhaberlesme.com.tr:8443/scm/cin/yaml.git']]])
+                //         }
+                //         dir('PCF_YAML') {
+                //             checkout([$class: 'GitSCM',
+                //             branches: [[name: '*/master']],
+                //             extensions: [[$class: 'CleanBeforeCheckout']],
+                //             userRemoteConfigs: [[
+                //             credentialsId: '7267ca7d-ae35-456c-9732-4c84b1d2c715',
+                //             url: 'https://bitbucket.ulakhaberlesme.com.tr:8443/scm/cin/cinar_pcf_yaml.git']]])
+                //         }
+                //         script {
+                //             if(env.BUILD_MODE == "debug") {
+                //             sh '''#!/bin/bash
+                //                 export CINAR_BASE=/opt/cinar
+                //                 export CINAR_CODE_GENERATOR_DIR=$CINAR_BASE/bin/ccg
+                //                 export CINAR_YAML_DIR=${WORKSPACE}/YAML
+                //                 export CINAR_PCF_YAML_DIR=${WORKSPACE}/PCF_YAML
+                //                 cp -R /opt/cinar/certificate ${WORKSPACE}
+                //                 rm -rf ${WORKSPACE}/certificate/pcf_turkcell
+                //                 export BUILD_NUMBER=$BUILD_NUMBER.debug
+                //                 make dist
+                //                 make doc
+                //             '''
+                //             }
+                //             if(env.BUILD_MODE == "release" && env.BRANCH_NAME == 'master') {
+                //             sh '''#!/bin/bash
+                //                 export CINAR_BASE=/opt/cinar
+                //                 export CINAR_CODE_GENERATOR_DIR=$CINAR_BASE/bin/ccg
+                //                 export CINAR_YAML_DIR=${WORKSPACE}/YAML
+                //                 export CINAR_PCF_YAML_DIR=${WORKSPACE}/PCF_YAML
+                //                 cp -R /opt/cinar/certificate ${WORKSPACE}
+                //                 rm -rf ${WORKSPACE}/certificate/pcf_turkcell
+                //                 make dist release=on
+                //                 make doc
+                //             '''
+                //             }
+                //         }
+                //     }
+                // }
+                // stage('UnitTest-Coverage') {
+                //     steps {
+                //         sh """
+                //         echo "Running Unit Tests"
+                //         """
+                //         junit '**/test*.xml '
+                //         sh """
+                //         echo "Running Cobertura Code Coverage"
+                //         """
+                //         cobertura autoUpdateHealth: false, autoUpdateStability: false, classCoverageTargets: '100, 0, 100', coberturaReportFile: '**/coverage*.xml ', conditionalCoverageTargets: '10, 0, 10', failUnhealthy: false, fileCoverageTargets: '100, 0, 100', lineCoverageTargets: '70, 0, 70', maxNumberOfBuilds: 0, methodCoverageTargets: '100, 0, 100', onlyStable: false, packageCoverageTargets: '100, 0, 100', sourceEncoding: 'ASCII', zoomCoverageChart: false
+                //         sh """
+                //         echo "Running Code Coverage"
+                //         """
+                //         publishCoverage adapters: [coberturaAdapter('**/coverage*.xml ')], failUnstable: true, globalThresholds: [[thresholdTarget: 'Method', unstableThreshold: 100.0], [thresholdTarget: 'Package', unstableThreshold: 100.0], [thresholdTarget: 'Line', unstableThreshold: 70.0], [thresholdTarget: 'Conditional', unstableThreshold: 10.0], [thresholdTarget: 'Class', unstableThreshold: 100.0], [thresholdTarget: 'File', unstableThreshold: 100.0]], sourceFileResolver: sourceFiles('STORE_LAST_BUILD')
+                //     }
+                // }
+                // stage('Static-Code') {
+                //     steps {
+                //         sh """
+                //         echo "Running Code Analysis"
+                //         """
+                //         publishCppcheck failureThreshold: '0', newFailureThreshold: '0', pattern: '**/cppcheck*.xml ', severityInformation: false, severityNoCategory: false, severityPortability: false, severityStyle: false, unHealthy: '1'
+                //     }
+                // }
+                // stage("Doxygen-Report") {
+                //     steps{
+                //         sh """
+                //             echo "Doxygen report"
+                //             """
+                //             publishHTML([allowMissing: true, alwaysLinkToLastBuild: false, keepAll: false, reportDir: 'doc/html', reportFiles: 'index.html', reportName: 'HTML Report', reportTitles: ''])
+                //     }
+                // }
+                // stage('Upload-Artifact') {
+                //     when {expression {return env.CHANGE_TARGET == null}}
+                //     steps {
+                //         sh """#!/bin/bash
+                //             rsync -avz --rsh="/usr/bin/sshpass -p "724365" ssh -o StrictHostKeyChecking=no -l root" \
+                //                 --exclude 'DEBIAN/' \
+                //                 --exclude 'Makefile' \
+                //                 --exclude 'systemd/' \
+                //                 --exclude "${params.NF_NAME}_${MAJOR}.${PHASE_NUMBER}.${SPRINT_NUMBER}.${BUILD_NUMBER}_amd64/" \
+                //                 ${WORKSPACE}/dist/ \
+                //                 ubuntu@192.168.13.47:/debrepo/latest
+                //             """
+                //     }
+                // }
+                stage('Send-Email') {
+                    when {
+                        expression {return env.CHANGE_TARGET == null}
+                    }
+                    steps {
+                        sh ''' #!/bin/bash
+                            git init
+                            RELEASE_NOTES=`git log --format=%B -n 1 $(git log -1 --pretty=format:"%h") | cat -`
+                            echo "<html>" >> commitmessage.html
+                            echo "<header><title> This is the title</title></header>" >> commitmessage.html
+                            echo "<body> Commit Autor and Commit Messages </body>" >> commitmessage.html
+                            echo "<body> ${RELEASE_NOTES} </body>" >> commitmessage.html
+                            echo "</html>" >> commitmessage.html
+                            '''
+                        script {
+                            def mailRecipients = "betul.aslan@ulakhaberlesme.com.tr"
+                            def jobName = currentBuild.fullDisplayName
+                            emailext body: '''${FILE, path="CIN/commitmessage.html"}''',
+                                mimeType: 'text/html',
+                                subject: "[Jenkins] ${jobName}",
+                                to: "${mailRecipients}",
+                                replyTo: "${mailRecipients}",
+                                recipientProviders: [[$class: 'CulpritsRecipientProvider']]
+                        }
+                    }
+                }
+                stage('Merge-to-branch'){
+                    when {
+                        expression {return env.CHANGE_TARGET == null}
+                        expression {return env.BRANCH_NAME == 'developer'}
+                        expression {return env.BUILD_MODE == 'debug'}
+                    }
+                    steps {
+                        sshagent(['a64a70a5-6e93-4afe-9bab-aff1ddc1b9d3']) {
+                            sh "git push origin HEAD:${TARGET_MAIN_BRANCH}"
+                        }
+                    }
+
+                }
+            }
+        }
+        stage('Continous-Deployment') {
+            agent {
+                node {
+                    label 'cinar_box_1.1_functional_test'
+                 }
+            }
+            when {
+                expression {return env.CHANGE_TARGET == null}
+                expression {return env.INSTALLATION == true}
+            }
+
+            environment {
+                VERSION=sh(returnStdout: true, script:"VERSION=${MAJOR}.${PHASE_NUMBER}.${SPRINT_NUMBER}.${BUILD_NUMBER} && echo \"\$VERSION\"").trim()
+                SETUP=sh(returnStdout: true, script:"if [ $BUILD_MODE == 'debug' ]; then SETUP=VTO; else SETUP=STO; fi; echo \"\$SETUP\"").trim()
+            }
+            steps {
+                    dir('Devops') {
+                    checkout([$class: 'GitSCM',
+                    branches: [[name: '*/master']],
+                    extensions: [[$class: 'CleanBeforeCheckout']],
+                    userRemoteConfigs: [[
+                    credentialsId: '7267ca7d-ae35-456c-9732-4c84b1d2c715',
+                    url: 'https://bitbucket.ulakhaberlesme.com.tr:8443/scm/cin/devops.git']]])
+                }
+                sh """
+                echo "Debug package installation"
+                cd ${WORKSPACE}/Devops/ansible
+                echo "${params.NF_NAME}=${VERSION}" > package-list
+                ansible-playbook ${params.SETUP}_nf_package_install.yaml -i ${params.SETUP}_hosts -e package_list_file=package-list
+                """
+            }
+            post {
+                always {
+                 deleteDir()
+                }
+            }
+        }
+    }
+}

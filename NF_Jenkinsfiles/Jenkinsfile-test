@@ -1,0 +1,91 @@
+// gitlabActionType NULL olması manuel olarak jenkins üzerinden build alındığı anlamına geliyor.
+@Library('5gcn_jenkins_library') _
+
+pipeline{
+    agent {
+        dockerfile {
+            label 'DockerAMF'
+            filename './NF_Dockerfiles/Dockerfile-test'
+            additionalBuildArgs "--tag jenkins/test"
+            args "-v /Source:/Source -v /var/run/docker.sock:/var/run/docker.sock -v /home/jenkins/workspace:/home/jenkins/workspace --user root"
+        }
+    }
+
+    parameters {
+        choice(name: 'test_ortami', choices: ['VTO', 'ST0', 'PTO', 'TT'], description: 'test_ortami')
+        string(name:'REPO_CREDENTIALS', defaultValue: "jenkins.service", description:"AMF  Repository Credentials ID")
+        string(name:'REPO_URL', defaultValue: "https://jenkins.servis@bitbucket.ulakhaberlesme.com.tr:8443/scm/ut/cinar_robot_tests.git", description:"Main Repo URL")
+        string(name:'REPO_BRANCH', defaultValue: "development", description:"Main Repo Branch")
+        activeChoiceParam('test_ids') {
+            description('Choose the test ids to run')
+            filterable()
+            choiceType('CHECKBOX')
+            groovyScript("""
+                return ['test-id1', 'test-id2', 'test-id3']
+            """)
+        }
+    }
+    environment {
+        REPO_YAML_BRANCH = 'master'
+        DEBREPO_CREDENTIALS = credentials('debrepo_credentials')
+        JENKINS_CREDENTIALS = credentials('jenkins.service')
+    }
+    stages{
+        stage("Environment Variables"){
+            steps {
+                sh "printenv"
+            }
+        }
+        stage("Clean Workspace"){
+            steps {
+                cleanWs()
+            }
+        }
+        stage('Cloning Repository'){
+            when {
+                expression {
+                    return (env.gitlabActionType == null || env.gitlabActionType == "PUSH")
+                }
+            }
+            steps{
+                script {
+                    updateGitlabCommitStatus name: 'repo clone', state: 'running'
+                    echo "========executing >> Cloning the AMF repository stage========"
+                    def branch = env.gitlabBranch == null ? env.REPO_BRANCH : env.gitlabBranch
+                    def gitUrl = env.gitlabSourceRepoHomepage == null ? env.REPO_URL : env.gitlabSourceRepoHomepage
+                    echo ">>> Using URL: ${gitUrl} ..."
+                    echo ">>> Using branch: ${branch} ..."
+                    git url: "${gitUrl}", credentialsId: "${REPO_CREDENTIALS}", branch: "${branch}"
+                }
+            }
+            post{
+                always{
+                    echo "========always for Clone Repository Stage========"
+                }
+                success{
+                    echo "========Clone Repository stage executed successfully========"
+                    updateGitlabCommitStatus name: 'repo clone', state: 'success'
+                }
+                failure{
+                    echo "========Clone Repository stage execution failed========"
+                    updateGitlabCommitStatus name: 'repo clone', state: 'failed'
+                }
+            }
+        }
+        stage("Pre-Test"){
+            steps{
+                script {
+                            sh '''#!/bin/bash
+                               ln -sf /cinar_5g_tests/inventories/shared_xto/group_vars inventories/vto/group_vars
+                               ln -sf /cinar_5g_tests/inventories/shared_xto/host_vars/ inventories/vto/host_vars
+                               ln -sf /cinar_5g_tests/inventories/shared_xto/group_vars inventories/sto/group_vars
+                               ln -sf /cinar_5g_tests/inventories/shared_xto/host_vars/ inventories/sto/host_vars
+                               ln -sf /cinar_5g_tests/roles playbooks/roles
+
+                            '''
+                }
+            }
+        
+        }            
+        }
+    }

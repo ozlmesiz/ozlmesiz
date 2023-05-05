@@ -1,0 +1,11 @@
+[nrf]
+10.10.44.191  ansible_ssh_user=ubuntu ansible_ssh_pass=test123
+
+
+[pto:children]
+nrf
+
+
+[envovergw_pto:children]
+pto
+

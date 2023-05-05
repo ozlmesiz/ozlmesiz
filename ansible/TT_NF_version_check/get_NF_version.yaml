@@ -1,0 +1,116 @@
+- hosts: all
+  gather_facts: false
+  become: yes
+  tasks:
+    - name: "Remove file (delete file)"
+      ansible.builtin.file:
+       path: nf_version.txt
+       state: absent
+      delegate_to: 127.0.0.1
+    - name: "Create a directory if it does not exist"
+      ansible.builtin.file:
+       path: nf_version.txt
+       state: touch
+       owner: jenkins
+       group: jenkins
+       mode: '0644'
+      delegate_to: 127.0.0.1
+    - include_vars: nf_variables.yml
+    - block:
+      - include_tasks: nf_version_operations.yml
+        with_items: "{{udr_package_names}}"
+        loop_control:
+           loop_var: package_name
+      become: yes
+      when: inventory_hostname in groups['udr']
+    - block:
+      - include_tasks: nf_version_operations.yml
+        with_items: "{{udm_package_names}}"
+        loop_control:
+           loop_var: package_name
+      become: yes
+      when: inventory_hostname in groups['udm']
+    - block:
+      - include_tasks: nf_version_operations.yml
+        with_items: "{{ausf_package_names}}"
+        loop_control:
+           loop_var: package_name
+      become: yes
+      when: inventory_hostname in groups['ausf']
+    - block:
+      - include_tasks: nf_version_operations.yml
+        with_items: "{{nrf_package_names}}"
+        loop_control:
+           loop_var: package_name
+      become: yes
+      when: inventory_hostname in groups['nrf']
+    - block:
+      - include_tasks: nf_version_operations.yml
+        with_items: "{{nssf_package_names}}"
+        loop_control:
+           loop_var: package_name
+      become: yes
+      when: inventory_hostname in groups['nssf']
+    - block:
+      - include_tasks: nf_version_operations.yml
+        with_items: "{{pcf_package_names}}"
+        loop_control:
+           loop_var: package_name
+      become: yes
+      when: inventory_hostname in groups['pcf']
+    - block:
+      - include_tasks: nf_version_operations.yml
+        with_items: "{{amf_package_names}}"
+        loop_control:
+           loop_var: package_name
+      become: yes
+      when: inventory_hostname in groups['amf']
+    - block:
+      - include_tasks: nf_version_operations.yml
+        with_items: "{{smf_package_names}}"
+        loop_control:
+           loop_var: package_name
+      become: yes
+      when: inventory_hostname in groups['smf']
+    - block:
+      - include_tasks: nf_version_operations.yml
+        with_items: "{{upf_package_names}}"
+        loop_control:
+           loop_var: package_name
+      become: yes
+      when: inventory_hostname in groups['upf']
+    - block:
+      - include_tasks: nf_version_operations.yml
+        with_items: "{{imspcscf_package_names}}"
+        loop_control:
+           loop_var: package_name
+      become: yes
+      when: inventory_hostname in groups['ims-pcscf']
+    - block:
+      - include_tasks: nf_version_operations.yml
+        with_items: "{{imsicscf_package_names}}"
+        loop_control:
+           loop_var: package_name
+      become: yes
+      when: inventory_hostname in groups['ims-icscf']
+    - block:
+      - include_tasks: nf_version_operations.yml
+        with_items: "{{imsscscf_package_names}}"
+        loop_control:
+           loop_var: package_name
+      become: yes
+      when: inventory_hostname in groups['ims-scscf']
+    - block:
+      - include_tasks: nf_version_operations.yml
+        with_items: "{{imsmrf_package_names}}"
+        loop_control:
+           loop_var: package_name
+      become: yes
+      when: inventory_hostname in groups['ims-mrf']
+    - block:
+      - include_tasks: nf_version_operations.yml
+        with_items: "{{imstas_package_names}}"
+        loop_control:
+           loop_var: package_name
+      become: yes
+      when: inventory_hostname in groups['ims-tas']

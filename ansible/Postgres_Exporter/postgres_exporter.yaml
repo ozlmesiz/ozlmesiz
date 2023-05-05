@@ -1,0 +1,66 @@
+- hosts: all
+  become: True
+  vars:
+     pe_version : "0.11.0"
+     pe_file : "/opt/postgres_exporter"
+     pe_path : "/usr/local/bin"
+     service_file: "/etc/systemd/system/postgres_exporter.service"
+     pe_metrics: "{{ metrics }}" #in test
+     #If the user is different from "postgres", enter -e "user=YOUR_USER"
+     #If the password is different from "postgres", enter -e "pass=YOUR_PASS"
+  tasks:
+    - name: create opt directory for postgres exporter
+      file:
+        path: "{{ pe_file }}"
+        state: directory
+    - name: download postgres exporter
+      get_url:
+        url: https://github.com/prometheus-community/postgres_exporter/releases/download/v{{ pe_version }}/postgres_exporter-{{ pe_version }}.linux-amd64.tar.gz
+        dest: "{{ pe_file }}"
+    - name: unarchive postgres exporter
+      unarchive:
+        remote_src: yes
+        src: "{{ pe_file }}/postgres_exporter-{{ pe_version }}.linux-amd64.tar.gz"
+        dest: "{{ pe_file }}"
+    - name: move postgres exporter to /usr/local/bin
+      copy:
+        src: "{{ pe_file }}/postgres_exporter-{{ pe_version }}.linux-amd64/postgres_exporter"
+        dest: "{{ pe_path }}"
+        remote_src: yes
+        owner: root
+        group: root
+        mode: 0755
+    - name: creating postgres_exporter.env file
+      copy:
+        dest: "{{ pe_file }}/postgres_exporter.env"
+        content: DATA_SOURCE_NAME="postgresql://{{ user | default('postgres') }}:{{ pass | default('postgres') }}@localhost:5432/?sslmode=disable"
+#    - name: create a dedicated user for postgres (if not)
+#      user:
+#        name: postgres
+#        shell: /bin/false
+#        system: yes
+    - name: install unit file to systemd
+      template:
+        src: templates/postgres_exporter.service
+        dest: "{{ service_file }}"
+        owner: root
+        group: root
+        mode: 0644
+    - name: systemd file is being configured.
+      ansible.builtin.replace:
+        path: "{{ service_file }}"
+        regexp: "{{ item.From }}"
+        replace: "{{ item.To }}"
+      with_items:
+        - { From: "pe_file" , To: "{{ pe_file }}"}
+        - { From: "pe_path", To: "{{ pe_path }}"}
+    - name: configure systemd to use service
+      systemd:
+        daemon_reload: yes
+        enabled: yes
+        state: started
+        name: postgres_exporter.service
+        
+        
+        
+        

@@ -1,0 +1,95 @@
+[amf1]
+10.10.21.17 ansible_ssh_user=cnrusr ansible_ssh_pass=P5vKG6vE
+[amf2]
+10.10.21.156 ansible_ssh_user=cnrusr ansible_ssh_pass=P5vKG6vE
+[amf:children]
+amf1
+amf2
+
+[ausf]
+10.10.21.38 ansible_ssh_user=cnrusr ansible_ssh_pass=P5vKG6vE
+[udm]
+10.10.21.5 ansible_ssh_user=cnrusr ansible_ssh_pass=P5vKG6vE
+[udr]
+10.10.21.39 ansible_ssh_user=cnrusr ansible_ssh_pass=P5vKG6vE
+
+[nrf1]
+10.10.21.19 ansible_ssh_user=cnrusr ansible_ssh_pass=P5vKG6vE
+[nrf2]
+10.10.21.23 ansible_ssh_user=cnrusr ansible_ssh_pass=P5vKG6vE
+
+[nrf:children]
+nrf1
+nrf2
+
+[pcf1]
+10.10.21.35 ansible_ssh_user=cnrusr ansible_ssh_pass=P5vKG6vE
+[pcf2]
+10.10.21.36 ansible_ssh_user=cnrusr ansible_ssh_pass=P5vKG6vE
+
+[pcf:children]
+pcf1
+pcf2
+
+[smf1]
+10.10.21.9 ansible_ssh_user=cnrusr ansible_ssh_pass=P5vKG6vE
+[smf2]
+10.10.21.192 ansible_ssh_user=cnrusr ansible_ssh_pass=P5vKG6vE
+
+[smf:children]
+smf1
+smf2
+
+[smsf]
+10.10.21.68 ansible_ssh_user=cnrusr ansible_ssh_pass=P5vKG6vE
+
+[upf1]
+10.10.21.33 ansible_ssh_user=cnrusr ansible_ssh_pass=P5vKG6vE
+[upf2]
+10.10.21.187 ansible_ssh_user=cnrusr ansible_ssh_pass=P5vKG6vE
+[upf3]
+10.10.21.199 ansible_ssh_user=cnrusr ansible_ssh_pass=P5vKG6vE
+
+[upf:children]
+upf1
+upf2
+upf3
+
+[nef1]
+10.10.21.88 ansible_ssh_user=cnrusr ansible_ssh_pass=P5vKG6vE
+[nef2]
+10.10.21.19 ansible_ssh_user=cnrusr ansible_ssh_pass=P5vKG6vE
+
+[nef:children]
+nef1
+nef2
+
+[nssf1]
+10.10.21.19 ansible_ssh_user=cnrusr ansible_ssh_pass=P5vKG6vE
+[nssf2]
+10.10.21.23 ansible_ssh_user=cnrusr ansible_ssh_pass=P5vKG6vE
+
+[nssf:children]
+nssf1
+nssf2
+
+[ims-pcscf]
+10.10.21.26 ansible_ssh_user=cnrusr ansible_ssh_pass=P5vKG6vE
+
+[ims-icscf]
+10.10.21.18 ansible_ssh_user=cnrusr ansible_ssh_pass=P5vKG6vE
+
+[ims-scscf]
+10.10.21.21 ansible_ssh_user=cnrusr ansible_ssh_pass=P5vKG6vE
+
+[ims-mrf]
+10.10.21.60 ansible_ssh_user=cnrusr ansible_ssh_pass=P5vKG6vE
+
+[ims-tas]
+10.10.21.63 ansible_ssh_user=cnrusr ansible_ssh_pass=P5vKG6vE
+
+[ims-ipsmgw]
+10.10.21.67 ansible_ssh_user=cnrusr ansible_ssh_pass=P5vKG6vE
+
+[ims-ecscf]
+10.10.21.65 ansible_ssh_user=cnrusr ansible_ssh_pass=P5vKG6vE

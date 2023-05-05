@@ -1,0 +1,225 @@
+
+- hosts: all
+  become: yes
+  #gather_facts: false
+  vars:
+     node_exporter_version: "{{ version }}"
+  tasks:
+   - name: Remove file
+     ansible.builtin.file:
+       path: /etc/apt/sources.list.d/cinar.list
+       state: absent
+   - name: Added repo adress
+     lineinfile:
+       dest: /etc/apt/sources.list.d/cinar.list
+       line: "{{ item }}"
+       create: yes
+     with_items:
+       - deb [trusted=yes] http://192.168.13.173:8080/repos/thirdparty/ amd64/
+       - deb [trusted=yes] http://192.168.13.173:8080/repos/cinar/ amd64/
+       - deb [trusted=yes] http://192.168.13.173:8080/repos/interworking/ amd64/
+       - deb [trusted=yes] http://192.168.13.173:8080/repos/latest/ amd64/
+
+  #gather_facts: false
+  ##package_list_file extra_variable olarak playbook calistirilirken verilmelidir.(sto-skt-package-list,sto-fkt-package-list)
+   - name: clean cache
+     command: apt clean
+   - name: update cache
+     command: apt update
+     ignore_errors: yes
+   - name: nrf packages install to nrf nodes
+     apt:
+      name: "{{ item }}"
+      allow_unauthenticated: yes
+      force: yes
+     when:
+       - inventory_hostname in groups['nrf']
+       - item is search("nrf")
+     with_lines: cat ./{{ package_list_file }}
+     ignore_errors: yes
+   - name: pcf packages install to pcf nodes
+     apt:
+      name: "{{ item }}"
+      allow_unauthenticated: yes
+      force: yes
+     when:
+       - inventory_hostname in groups['pcf']
+       - item is search("pcf")
+     with_lines: cat ./{{ package_list_file }}
+     ignore_errors: yes
+   - name: smf package install to smf nodes
+     apt:
+      name: "{{ item }}"
+      allow_unauthenticated: yes
+      force: yes
+     when:
+       - inventory_hostname in groups['smf']
+       - item is search("smf")
+     with_lines: cat ./{{ package_list_file }}
+     ignore_errors: yes
+   - name: nssf package install to nssf nodes
+     apt:
+      name: "{{ item }}"
+      allow_unauthenticated: yes
+      force: yes
+     when:
+       - inventory_hostname in groups['nssf']
+       - item is search("nssf")
+     with_lines: cat ./{{ package_list_file }}
+     ignore_errors: yes
+   - name: amf package install to amf nodes
+     apt:
+      name: "{{ item }}"
+      allow_unauthenticated: yes
+      force: yes
+     when:
+       - inventory_hostname in groups['amf']
+       - item is search("amf")
+     with_lines: cat ./{{ package_list_file }}
+     ignore_errors: yes
+   - name: upf package install to upf nodes
+     apt:
+      name: "{{ item }}"
+      allow_unauthenticated: yes
+      force: yes
+     when:
+       - inventory_hostname in groups['upf']
+       - item is search("upf")
+     with_lines: cat ./{{ package_list_file }}
+     ignore_errors: yes
+   - name: udm package install to udm nodes
+     apt:
+      name: "{{ item }}"
+      allow_unauthenticated: yes
+      force: yes
+     when:
+       - inventory_hostname in groups['udm']
+       - item is search("libcnr5gmessages") or item is search("libcnrcommon") or item is search("libcnrhttp1") or item is search("libcnrhttp2") or item is search("udm")
+     with_lines: cat ./{{ package_list_file }}
+     ignore_errors: yes
+   - name: udr package install to udr nodes
+     apt:
+      name: "{{ item }}"
+      allow_unauthenticated: yes
+      force: yes
+     when:
+       - inventory_hostname in groups['udr']
+       - item is search("libcnr5gmessages") or item is search("libcnrcommon") or item is search("libcnrhttp1") or item is search("libcnrhttp2") or item is search("udr")
+     with_lines: cat ./{{ package_list_file }}
+     ignore_errors: yes
+   - name: ausf package install to ausf nodes
+     apt:
+      name: "{{ item }}"
+      allow_unauthenticated: yes
+      force: yes
+     when:
+       - inventory_hostname in groups['ausf']
+       - item is search("libcnr5gmessages") or item is search("libcnrcommon") or item is search("libcnrhttp1") or item is search("libcnrhttp2") or item is search("ausf")
+     with_lines: cat ./{{ package_list_file }}
+     ignore_errors: yes
+   - name: cinar-tas package install to ims-tas nodes
+     apt:
+      name: "{{ item }}"
+      allow_unauthenticated: yes
+      force: yes
+     when:
+       - inventory_hostname in groups['ims-tas']
+       - item is search("cinar-tas")
+     with_lines: cat ./{{ package_list_file }}
+     ignore_errors: yes
+   - name: cinar-pcscf package install to ims-pcscf nodes
+     apt:
+      name: "{{ item }}"
+      allow_unauthenticated: yes
+      force: yes
+     when:
+       - inventory_hostname in groups['ims-pcscf']
+       - item is search("cinar-pcscf")
+     with_lines: cat ./{{ package_list_file }}
+     ignore_errors: yes
+   - name: cinar-scscf package install to ims-scscf nodes
+     apt:
+      name: "{{ item }}"
+      allow_unauthenticated: yes
+      force: yes
+     when:
+       - inventory_hostname in groups['ims-scscf']
+       - item is search("cinar-scscf")
+     with_lines: cat ./{{ package_list_file }}
+     ignore_errors: yes
+   - name: cinar-icscf package install to ims-icscf nodes
+     apt:
+      name: "{{ item }}"
+      allow_unauthenticated: yes
+      force: yes
+     when:
+       - inventory_hostname in groups['ims-icscf']
+       - item is search("cinar-icscf")
+     with_lines: cat ./{{ package_list_file }}
+     ignore_errors: yes
+   - name: cinar-mrf package install to ims-mrf nodes
+     apt:
+      name: "{{ item }}"
+      allow_unauthenticated: yes
+      force: yes
+     when:
+       - inventory_hostname in groups['ims-mrf']
+       - item is search("cinar-mrf")
+     with_lines: cat ./{{ package_list_file }}
+     ignore_errors: yes
+
+   - name: update cache
+     command: apt update
+     ignore_errors: yes
+   - name: Install ntpdate package
+     apt:
+       name: ntpdate
+       state: present
+   - name: Install ntp package
+     apt:
+       name: ntp
+       state: present
+   - name: timedatectl ntp off
+     command: sudo timedatectl set-ntp off
+   - name: hosts update
+     shell:  echo  "\n\t10.10.44.35 ntp1" >> /etc/hosts
+   - name: time zone update
+     command: sudo timedatectl set-timezone Europe/Istanbul
+   - name: ntp.conf update
+     shell:  echo  "\n\tserver ntp1 prefer iburst" >> /etc/ntp.conf
+   - name: ntp restart
+     command: sudo systemctl restart ntp
+  
+   - name: download node exporter
+     get_url:
+        url: https://github.com/prometheus/node_exporter/releases/download/v{{ node_exporter_version }}/node_exporter-{{ node_exporter_version }}.linux-amd64.tar.gz
+        dest: /tmp
+   - name: unarchive node exporter
+     unarchive:
+        remote_src: yes
+        src: /tmp/node_exporter-{{ node_exporter_version }}.linux-amd64.tar.gz
+        dest: /tmp
+   - name: move node exporter to /usr/local/bin
+     copy:
+        src: /tmp/node_exporter-{{ node_exporter_version }}.linux-amd64/node_exporter
+        dest: /usr/local/bin/node_exporter
+        remote_src: yes
+        owner: root
+        group: root
+        mode: 0755
+   - name: install unit file to systemd
+     template:
+        src: templates/node_exporter.service.j2
+        dest: /etc/systemd/system/node_exporter.service
+        owner: root
+        group: root
+        mode: 0600
+   - name: configure systemd to use service
+     systemd:
+        daemon_reload: yes
+        enabled: yes
+        state: started
+        name: node_exporter.service
+
+
+  

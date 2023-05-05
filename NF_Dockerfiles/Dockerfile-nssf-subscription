@@ -1,0 +1,112 @@
+# Çınar ve 3rd Parti kütüphanelerin kurulduğu yansıyı multi-stage yapısında bağlıyoruz
+FROM ubuntu:xenial as withlinuxtools
+
+RUN echo "deb [trusted=yes] http://192.168.13.173:8080/repos/cinar/ amd64/"  >> /etc/apt/sources.list.d/cinar.list
+RUN echo "deb [trusted=yes] http://192.168.13.173:8080/repos/new_interworking/ amd64/"  >> /etc/apt/sources.list.d/cinar.list
+RUN echo "deb [trusted=yes] http://192.168.13.173:8080/repos/MC/ amd64/"  >> /etc/apt/sources.list.d/cinar.list
+RUN echo "deb [trusted=yes] http://192.168.13.173:8080/repos/thirdparty/ amd64/"  >> /etc/apt/sources.list.d/cinar.list
+RUN apt-get update && apt-get install -y socat \
+    tmux \
+    wget \
+    net-tools \
+    netcat \
+    iputils-ping \
+    sudo \
+    unzip \
+    gettext-base \ 
+    sshpass
+
+FROM withlinuxtools as withdevelopmenttools
+
+# g++ > Gnu C/C++ Derleyecisi
+# gdb > C++ uygulamasını debugger
+# dkms > 
+RUN apt-get install -y g++ \
+    gdb \
+    git \
+    cpp-jwt \
+    dkms \
+    python \
+    nano \
+    g3log \
+    gcovr \
+    default-jre\
+    cppcheck 
+#                       rabbitmq-server \
+#                       dpdk \
+#                       redis-server \
+#                       redis-tools \
+
+FROM withdevelopmenttools as withdevelopmentlibs
+RUN apt-get install -y  boost-all-dev 
+RUN apt-get install -y libncurses5-dev
+RUN apt-get install -y libreadline-dev
+RUN apt-get install -y libsasl2-dev
+RUN apt-get install -y libssl-dev
+RUN apt-get install -y libxml2
+RUN apt-get install -y nettle-dev 
+RUN apt-get install -y uuid-dev 
+RUN apt-get install -y libxerces-c-dev 
+RUN apt-get install -y libevent 
+RUN apt-get install -y libicu55 
+RUN apt-get install -y libnghttp2-asio 
+RUN apt-get install -y libprometheuscpp 
+RUN apt-get install -y nlohmann-json 
+RUN apt-get install -y certificate 
+RUN apt-get install -y mongo-c-driver 
+RUN apt-get install -y mongo-cxx-driver 
+RUN apt-get install -y librabbitmq4 
+RUN apt-get install -y libpq5 
+RUN apt-get install -y libgnutls-dev 
+RUN apt-get install -y freediameter-cinar-common 
+RUN apt-get install -y freediameter-cinar-dev 
+RUN apt-get install -y cinarframework-dbg 
+RUN apt-get install -y cinarcodegenerator 
+RUN apt-get install -y cinarloggersink 
+RUN apt-get install -y googletest 
+RUN apt-get install -y cinarnnssfnssaiavailability.15.201906-interworking.dbg 
+RUN apt-get install -y cinarnnrfnfdiscovery.15.201906-interworking.dbg 
+RUN apt-get install -y cinarnudrdatarepository.15.201906-interworking.dbg 
+RUN apt-get install -y cinarnnrfnfmanagement.15.201906-interworking.dbg 
+RUN apt-get install -y cinarnnrfaccesstoken.15.201906-interworking.dbg 
+RUN apt-get install -y cinarnnssfnsselection.15.201906-interworking.dbg 
+RUN apt-get install -y cinarnchfspendinglimitcontrol.15.201906-interworking.dbg
+RUN apt-get install -y cinartracing 
+RUN apt-get install -y opentelemetry-cpp 
+RUN apt-get install -y thrift
+RUN apt-get install -y libcurl4-openssl-dev
+RUN apt-get install -y mongodb-clients
+
+FROM withdevelopmentlibs
+
+RUN apt-get install -y libssl-dev autoconf libtool make \
+    && wget https://curl.se/download/curl-7.82.0.zip \
+    && unzip curl-7.82.0.zip
+WORKDIR curl-7.82.0
+RUN ./buildconf \
+    && ./configure --with-ssl \
+    && make \
+    && make install \
+    && ldconfig
+
+RUN apt-get install -y apt-transport-https ca-certificates
+RUN curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg 
+RUN echo "deb [arch=amd64 signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu xenial stable" > /etc/apt/sources.list.d/docker.list 
+RUN apt-get update 
+RUN apt-get install -y docker-ce-cli
+
+RUN curl -LO "https://storage.googleapis.com/kubernetes-release/release/$(curl -s https://storage.googleapis.com/kubernetes-release/release/stable.txt)/bin/linux/amd64/kubectl" 
+RUN chmod +x ./kubectl
+RUN mv ./kubectl /usr/local/bin/kubectl
+RUN curl -fsSL -o get_helm.sh https://raw.githubusercontent.com/helm/helm/master/scripts/get-helm-3
+RUN chmod +x get_helm.sh && ./get_helm.sh
+
+
+USER root
+WORKDIR /root
+RUN mkdir -p /Source
+RUN echo /opt/cinar/lib > /etc/ld.so.conf.d/cinar.conf && ldconfig
+RUN printf "fs.inotify.max_user_watches=524288" >> /etc/sysctl.conf
+RUN sysctl -p
+
+ENTRYPOINT ["/sbin/init"]

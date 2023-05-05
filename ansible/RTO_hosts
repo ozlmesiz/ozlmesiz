@@ -1,0 +1,37 @@
+[nrf]
+10.10.21.208  ansible_ssh_user=cnrusr ansible_ssh_pass=P5vKG6vE 
+
+[nssf]
+10.10.21.208  ansible_ssh_user=cnrusr ansible_ssh_pass=P5vKG6vE 
+
+[udm]
+10.10.21.215  ansible_ssh_user=cnrusr ansible_ssh_pass=P5vKG6vE 
+
+[udr]
+10.10.21.191  ansible_ssh_user=cnrusr ansible_ssh_pass=P5vKG6vE 
+
+[ausf]
+10.10.21.201   ansible_ssh_user=cnrusr ansible_ssh_pass=P5vKG6vE
+
+[pcf]
+10.10.21.204  ansible_ssh_user=cnrusr ansible_ssh_pass=P5vKG6vE
+
+[smf]
+10.10.21.213  ansible_ssh_user=cnrusr ansible_ssh_pass=P5vKG6vE
+
+[amf]
+10.10.21.214  ansible_ssh_user=cnrusr ansible_ssh_pass=P5vKG6vE
+
+[upf]
+10.10.21.219  ansible_ssh_user=cnrusr ansible_ssh_pass=P5vKG6vE
+
+[rto:children]
+nrf
+nssf
+udm
+udr
+ausf
+pcf
+smf
+upf
+amf

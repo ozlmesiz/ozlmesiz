@@ -1,0 +1,11 @@
+[Unit]
+Description=Node Exporter
+After=network.target
+ 
+[Service]
+Type=simple
+Restart=always
+ExecStart=/usr/local/bin/node_exporter --collector.disable-defaults --collector.disable-defaults --collector.cpu  --collector.cpufreq --collector.diskstats --collector.arp --collector.ethtool --collector.meminfo --collector.netstat --collector.network_route --collector.vmstat --collector.netclass --collector.netdev --collector.filesystem --collector.loadavg --collector.stat --collector.schedstat
+ 
+[Install]
+WantedBy=multi-user.target

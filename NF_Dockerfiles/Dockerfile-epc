@@ -1,0 +1,6 @@
+FROM ubuntu:xenial
+# syntax=docker/dockerfile:1.4
+RUN apt update
+
+USER root
+WORKDIR /

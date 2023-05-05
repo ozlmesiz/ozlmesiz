@@ -1,0 +1,247 @@
+// gitlabActionType NULL olması manuel olarak jenkins üzerinden build alındığı anlamına geliyor.
+@Library('5gcn_jenkins_library') _
+
+pipeline{
+    agent {
+        dockerfile {
+            label 'DockerSMSF'
+            filename './NF_Dockerfiles/Dockerfile-smsf-common'
+            additionalBuildArgs "--tag jenkins/smsf-common"
+            args "-v /opt/cinar/packages:/opt/cinar/packages -v /Source:/Source -v /etc/ssl/certs/:/etc/ssl/certs/ -v /var/run/docker.sock:/var/run/docker.sock -v /home/jenkins/workspace:/home/jenkins/workspace --user root"
+        }
+    }
+
+    parameters {
+        string(name:'PACKAGE_VERSION', defaultValue:"MAJOR:1,PHASE_NUMBER:0,SPRINT_NUMBER:0,BUILD_NUMBER:${BUILD_NUMBER} " ,description:"Extra dist arguments")
+        string(name:'DEBIAN_REPOSITORY', defaultValue:"debrepo.ulakhaberlesme.com.tr", description:"Chart Museum URL")
+        string(name:'REPO_CREDENTIALS', defaultValue: "7267ca7d-ae35-456c-9732-4c84b1d2c715", description:"SMSF-COMMON  Repository Credentials ID")
+        string(name:'REPO_URL', defaultValue: "https://jenkins.servis@bitbucket.ulakhaberlesme.com.tr:8443/scm/cin/cinar_smsf_common.git", description:"Main Repo URL")
+        string(name:'REPO_BRANCH', defaultValue: "developer", description:"Main Repo Branch")
+    }
+
+    environment {
+        REPO_YAML_URL = 'http://gitlab.ulakhaberlesme.com.tr/CIN/YAML.git'
+        REPO_YAML_BRANCH = 'master'
+        DEBREPO_CREDENTIALS = credentials('debrepo_credentials')
+        JENKINS_CREDENTIALS = credentials('jenkins.service')
+        PKG_DIR = '/opt/cinar/packages/'
+        PKG_DEST = 'ubuntu@192.168.13.47:/home/ubuntu/docker/ulak-aptly/volume/incoming/xenial-unstable'
+        PASS = '724365'
+        PACKAGE_NAME = 'libcnrsmsf-common'
+        PACKAGE_VERSION = '$(MAJOR).$(PHASE_NUMBER).$(SPRINT_NUMBER).$(BUILD_NUMBER)'
+        WS = '/home/jenkins/workspace/cnrsmsf-common/'
+    }
+    stages{
+        stage("Environment Variables"){
+            steps {
+                sh "printenv"
+            }
+        }
+        stage("Clean Workspace"){
+            steps {
+                cleanWs()
+            }
+        }
+        stage('Cloning Repository'){
+            when {
+                expression {
+                    return (env.gitlabActionType == null || env.gitlabActionType == "PUSH")
+                }
+            }
+            steps{
+                script {
+                    updateGitlabCommitStatus name: 'repo clone', state: 'running'
+                    echo "========executing >> Cloning the SMSF-COMMON repository stage========"
+                    def branch = env.gitlabBranch == null ? env.REPO_BRANCH : env.gitlabBranch
+                    def gitUrl = env.gitlabSourceRepoHomepage == null ? env.REPO_URL : env.gitlabSourceRepoHomepage
+                    echo ">>> Using URL: ${gitUrl} ..."
+                    echo ">>> Using branch: ${branch} ..."
+                    git url: "${gitUrl}", credentialsId: "${REPO_CREDENTIALS}", branch: "${branch}"
+                }
+            }
+            post{
+                always{
+                    echo "========always for Clone Repository Stage========"
+                }
+                success{
+                    echo "========Clone Repository stage executed successfully========"
+                    updateGitlabCommitStatus name: 'repo clone', state: 'success'
+                }
+                failure{
+                    echo "========Clone Repository stage execution failed========"
+                    updateGitlabCommitStatus name: 'repo clone', state: 'failed'
+                }
+            }
+        }
+        stage("Build"){
+            steps{
+                script {
+                          
+                            echo "${JOB_NAME}"
+                            if(env.REPO_BRANCH =~ /^developer(.*)/) {
+                            sh '''#!/bin/bash
+                                rm -f /opt/cinar/packages/
+                                export CINAR_BASE=/opt/cinar
+                                export BUILD_NUMBER=100.debug
+                                export CINAR_CODE_GENERATOR_DIR=$CINAR_BASE/bin/ccg
+                                export CINAR_YAML_DIR=${WORKSPACE}/YAML
+                                cp -R /opt/cinar/certificate ${WORKSPACE}
+                                if [[ $(echo $JOB_NAME | awk -F '/' '{print $1}') == "libcnrsmf-common" || $(echo $JOB_NAME | awk -F '/' '{print $1}') == "libcnramf-common" || $(echo $JOB_NAME | awk -F '/' '{print $1}') == "libcnrsmsf-common" ]]; then
+                                  echo "common build"
+                                elif [[ $(echo $JOB_NAME | awk -F '/' '{print \$1}' | sed s/"cnr"//) == "smf" ]]; then
+                                  sudo apt-get update
+                                  VERSION=`apt-cache show libcnrsmf-common | grep Version | cut -d' ' -f2 |  grep -v debug | head -1`
+                                  echo $VERSION
+                                  sudo apt-get install libcnrsmf-common=$VERSION
+                                elif [[ $(echo $JOB_NAME | awk -F '/' '{print \$1}' | sed s/"cnr"//) == "amf" ]]; then
+                                  sudo service rabbitmq-server start
+                                  sudo apt-get update
+                                  VERSION=`apt-cache show libcnramf-common | grep Version | cut -d' ' -f2 |  grep -v debug | head -1`
+                                  echo $VERSION
+                                  sudo apt-get install libcnramf-common=$VERSION
+                                elif [[ $(echo $JOB_NAME | awk -F '/' '{print \$1}' | sed s/"cnr"//) == "smsf" ]]; then
+                                  sudo service rabbitmq-server start
+                                  sudo apt-get update
+                                  VERSION=`apt-cache show libcnrsmsf-common | grep Version | cut -d' ' -f2 |  grep -v debug | head -1`
+                                  echo $VERSION
+                                  sudo apt-get install libcnrsmsf-common=$VERSION
+                                fi
+                                make dist_release
+                            '''
+                            }
+                            if(env.REPO_BRANCH =~ /^master(.*)/) {
+                            sh '''#!/bin/bash
+                                export CINAR_BASE=/opt/cinar
+                                export CINAR_CODE_GENERATOR_DIR=$CINAR_BASE/bin/ccg
+                                export CINAR_YAML_DIR=${WORKSPACE}/YAML
+                                cp -R /opt/cinar/certificate ${WORKSPACE}
+                                if [[ $(echo $JOB_NAME | awk -F '/' '{print $1}') == "libcnrsmf-common" || $(echo $JOB_NAME | awk -F '/' '{print $1}') == "libcnramf-common" || $(echo $JOB_NAME | awk -F '/' '{print $1}') == "libcnrsmsf-common" ]]; then
+                                  echo "common build"
+                                elif [[ $(echo $JOB_NAME | awk -F '/' '{print \$1}' | sed s/"cnr"//) == "smf" ]]; then
+                                  sudo apt-get update
+                                  VERSION=`apt-cache show libcnrsmf-common | grep Version | cut -d' ' -f2 |  grep -v debug | head -1`
+                                  echo $VERSION
+                                  sudo apt-get install libcnrsmf-common=$VERSION
+                                elif [[ $(echo $JOB_NAME | awk -F '/' '{print \$1}' | sed s/"cnr"//) == "amf" ]]; then
+                                  sudo service rabbitmq-server start
+                                  sudo apt-get update
+                                  VERSION=`apt-cache show libcnramf-common | grep Version | cut -d' ' -f2 |  grep -v debug | head -1`
+                                  echo $VERSION
+                                  sudo apt-get install libcnramf-common=$VERSION
+                                elif [[ $(echo $JOB_NAME | awk -F '/' '{print \$1}' | sed s/"cnr"//) == "smsf" ]]; then
+                                  sudo service rabbitmq-server start
+                                  sudo apt-get update
+                                  VERSION=`apt-cache show libcnrsmsf-common | grep Version | cut -d' ' -f2 |  grep -v debug | head -1`
+                                  echo $VERSION
+                                  sudo apt-get install libcnrsmsf-common=$VERSION
+                                fi
+                                make dist_release
+                            '''
+                            }
+                            if(env.REPO_BRANCH =~ /^nokia(.*)/) {
+                            sh '''#!/bin/bash
+                                export CINAR_BASE=/opt/cinar
+                                export CINAR_CODE_GENERATOR_DIR=$CINAR_BASE/bin/ccg
+                                export CINAR_YAML_DIR=${WORKSPACE}/YAML
+                                cp -R /opt/cinar/certificate ${WORKSPACE}
+                                if [[ $(echo $JOB_NAME | awk -F '/' '{print $1}') == "libcnramf-common-nokia" ]]; then
+                                  echo "common build"
+                                elif [[ $(echo $JOB_NAME | awk -F '/' '{print \$1}' | sed s/"cnr"//) == "amf" ]]; then
+                                 sudo service rabbitmq-server start
+                                  sudo apt-get update
+                                  VERSION=`apt-cache show libcnramf-common-nokia | grep Version | cut -d' ' -f2  | head -1`
+                                  echo $VERSION
+                                  sudo apt-get install libcnramf-common-nokia=$VERSION
+                                fi
+                                make dist_fast
+                            '''
+                            }
+                             if(env.REPO_BRANCH =~ /^TT_Lab_Support(.*)/) {
+                            sh '''#!/bin/bash
+                                export CINAR_BASE=/opt/cinar
+                                export CINAR_CODE_GENERATOR_DIR=$CINAR_BASE/bin/ccg
+                                export CINAR_YAML_DIR=${WORKSPACE}/YAML
+                                cp -R /opt/cinar/certificate ${WORKSPACE}
+                                if [[ $(echo $JOB_NAME | awk -F '/' '{print $1}') == "libcnrsmf-common" || $(echo $JOB_NAME | awk -F '/' '{print $1}') == "libcnramf-common" || $(echo $JOB_NAME | awk -F '/' '{print $1}') == "libcnrsmsf-common" ]]; then
+                                  echo "common build"
+                                elif [[ $(echo $JOB_NAME | awk -F '/' '{print \$1}' | sed s/"cnr"//) == "smf" ]]; then
+                                  sudo apt-get update
+                                  VERSION=`apt-cache show libcnrsmf-common | grep Version | cut -d' ' -f2 |  grep -v debug | head -1`
+                                  echo $VERSION
+                                  sudo apt-get install libcnrsmf-common=$VERSION
+                                elif [[ $(echo $JOB_NAME | awk -F '/' '{print \$1}' | sed s/"cnr"//) == "amf" ]]; then
+                                  sudo service rabbitmq-server start
+                                  sudo apt-get update
+                                  VERSION=`apt-cache show libcnramf-common | grep Version | cut -d' ' -f2 |  grep -v debug | head -1`
+                                  echo $VERSION
+                                  sudo apt-get install libcnramf-common=$VERSION
+                                elif [[ $(echo $JOB_NAME | awk -F '/' '{print \$1}' | sed s/"cnr"//) == "smsf" ]]; then
+                                  sudo service rabbitmq-server start
+                                  sudo apt-get update
+                                  VERSION=`apt-cache show libcnrsmsf-common | grep Version | cut -d' ' -f2 |  grep -v debug | head -1`
+                                  echo $VERSION
+                                  sudo apt-get install libcnrsmsf-common=$VERSION
+                                fi
+                                make dist_release
+                            '''
+                            } 
+                }
+            }
+            post{
+                always{
+                    echo "========always for Build Stage========"
+                }
+                success{
+                    echo "========Build stage executed successfully========"
+                    updateGitlabCommitStatus name: 'building', state: 'success'
+                }
+                failure{
+                    echo "========Build stage execution failed========"
+                    updateGitlabCommitStatus name: 'building', state: 'failed'
+                }
+            }
+        
+        } 
+
+         stage('Create Changelog') {
+             steps {
+                 script {
+                      sh''' #!/bin/bash
+                      mkdir -p /tmp/deb_dir
+                      TMP_DIR=/tmp/deb_dir
+                      DEB_FILE=$(cd ${PKG_DIR} && ls *.deb | head -n 1)
+                      dpkg-deb -R  ${PKG_DIR}${DEB_FILE}  ${TMP_DIR}/
+                      git log --tags --simplify-by-decoration --pretty="format:%d %x09%ad %x09%s %x09%cd %x09%h" --date=format:'%d/%m/%Y %H:%M:%S ' > ${TMP_DIR}/DEBIAN/changelog
+                      rm -rf ${PKG_DIR}*.deb
+
+                      dpkg-deb --build ${TMP_DIR}/  ${PKG_DIR}${DEB_FILE} '''
+						}
+					}
+                } 
+     
+        stage('Upload-Artifact') {
+            when {expression {return env.CHANGE_TARGET == null}}
+            steps {
+                script {
+                     sh 'rsync -avz --rsh="/usr/bin/sshpass -p "${PASS}" ssh -o StrictHostKeyChecking=no -l root" ${PKG_DIR}*.deb ${PKG_DEST}'
+                        }
+      }
+        }
+        stage('Archive-Artifact') {
+            steps {
+                script {
+                     sh '''
+                     #!/bin/bash
+                     cd ${PKG_DIR}
+                     DEB_FILE=$(ls | grep ".deb")
+                     echo "package: ${DEB_FILE} url: https://jenkins-cinar.ulakhaberlesme.com.tr/" > ${WORKSPACE}/artifactFile.txt
+                     
+                     '''
+                        }
+             archiveArtifacts artifacts: 'artifactFile.txt', fingerprint: true
+      }
+        }       
+
+
+    }
+}

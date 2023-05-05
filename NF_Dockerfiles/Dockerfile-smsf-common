@@ -1,0 +1,107 @@
+FROM ubuntu:xenial AS ubuntu-ortak
+USER root
+WORKDIR /root
+
+RUN echo "deb [trusted=yes] http://debrepo.ulakhaberlesme.com.tr/ubuntu/ xenial oldstable" >> /etc/apt/sources.list.d/cinar.list 
+RUN echo "deb [trusted=yes] http://debrepo.ulakhaberlesme.com.tr/ubuntu/ xenial unstable"  >> /etc/apt/sources.list.d/cinar.list
+RUN echo "deb [trusted=yes] http://debrepo.ulakhaberlesme.com.tr/ubuntu/ xenial stable"  >> /etc/apt/sources.list.d/cinar.list
+RUN apt-get update
+
+RUN apt install -y  certificate \
+                    cinarloggersink \
+                    cpp-jwt \
+                    dkms \
+                    dpdk \
+                    libevent \
+                    libicu55 \
+                    libnghttp2-asio \
+                    libprometheuscpp \
+                    mongo-c-driver \
+                    mongo-cxx-driver \
+                    nlohmann-json \
+                    python \
+                    nano \
+                    curl \
+                    wget \
+                    net-tools \
+                    netcat \
+                    iputils-ping \
+                    g3log=2.1.2 \
+                    libpq5 \
+                    sudo \
+                    libreadline-dev \
+                    libxerces-c-dev \
+                    lix2x3asnpackage \
+                    nettle-dev
+
+#ADD http://192.168.13.47/nf_certificate/localhost.crt /opt/cinar/certificate
+#ADD http://192.168.13.47/nf_certificate/localhost.key /opt/cinar/certificate
+
+#RUN chmod 775 /opt/cinar/certificate/localhost*
+
+FROM ubuntu-ortak AS ubuntu-dev
+RUN apt install -y  zip \
+                    unzip \
+                    g++ \
+                    make \
+                    checkinstall \
+                    gdb \
+                    gdbserver \
+                    default-jre \
+                    doxygen \
+                    gcovr \
+                    cppcheck \
+                    graphviz \
+                    libpqxx-dev \
+                    libsctp-dev \
+                    libncurses5-dev \
+                    libxml2-dev \
+                    uuid-dev \
+                    librabbitmq-dev \
+                    rabbitmq-server \
+                    libgnutls-dev \
+                    libgcrypt-dev \
+                    libidn11-dev \
+                    libsctp-dev \
+                    boost-all-dev \
+                    cinarcodegenerator  \
+                    cpp-jwt \
+                    googletest \
+                    rsync \
+                    sshpass \
+                    git \
+                    lix1package \
+                    xsd \
+                    cinarcryptolib \
+                    cinarasn1clib=1.0.4 \
+                    bsdmainutils \
+                    linux-headers-generic \
+                    libhiredis-dev \
+                    libnuma-dev:amd64
+FROM ubuntu-dev AS nfbuild
+RUN apt update && \
+    apt install -y cinarframework.dbg \
+                cinarnnrfaccesstoken.15.201906-Interworking.dbg \
+                cinarnnrfnfdiscovery.15.201906-Interworking.dbg \
+                cinarnnrfnfmanagement.15.201906-Interworking.dbg \
+                cinarnamfeventexposure.15.201906-Interworking.dbg \
+                cinarnudmsdm.15.201906-Interworking.dbg \
+                cinarnudmee.15.201906-Interworking.dbg \
+                cinarnudmuecm.15.201906-Interworking.dbg \
+                cinarnsmfpdusession.15.201906-Interworking.dbg \
+                cinarnamfcommunication.15.201906-Interworking.dbg \
+                cinarnsmfeventexposure.15.201906-Interworking.dbg \
+                cinarnpcfsmpolicycontrol.15.201906-Interworking.dbg \
+                cinarnnefpfdmanagement.15.201906-Interworking.dbg \
+                cinarnsmsfsmservice.15.201909-interworking.dbg \
+                cinarnamflocation.15.201906-interworking.dbg \
+                cinarnamfmt.15.201906-interworking.dbg \
+                cinarnchfconvergedcharging.15.201906-Interworking.dbg \
+                cinarnpcfampolicycontrol.15.201906-interworking.dbg \
+                cinarnausfueauthentication.15.201906-interworking.dbg \
+                cinarnnssfnsselection.15.201906-interworking.dbg \
+                cinarnnssfnssaiavailability.15.201906-interworking.dbg && \
+    echo "/opt/cinar/lib" > /etc/ld.so.conf.d/cinar.conf && /sbin/ldconfig && \
+    echo "192.168.10.14 bitbucket.ulakhaberlesme.com.tr" >> /etc/hosts && \
+    mkdir /opt/cinar/packages 
+

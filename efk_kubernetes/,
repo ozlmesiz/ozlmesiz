@@ -1,0 +1,33 @@
+<source>
+  @type forward
+</source>
+
+<match *>
+ @type copy
+  <store ignore_error>
+   @type stdout
+ </store>
+ <store>
+    @type elasticsearch
+    @id out_es
+    @log_level info
+    include_tag_key true
+    ssl_verify true
+    host elasticsearch
+    port 9201
+    scheme http
+    logstash_format true
+    logstash_prefix "vto"
+    logstash_dateformat "%Y.%m"
+    include_timestamp true
+    reconnect_on_error true
+    reload_on_failure true
+     <buffer>
+      flush_interval 10s
+     </buffer>
+ flush_interval 10s
+ </store>
+  <store>
+    @type stdout
+  </store>
+</match>

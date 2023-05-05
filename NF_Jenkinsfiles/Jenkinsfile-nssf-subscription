@@ -1,0 +1,356 @@
+def artifactAssets = [:]
+def makeDistArgumentsMap = [:]
+def makeTestArgumentsMap = [:]
+def devCtrName = "nssf_subscription_dev_ctr"
+
+pipeline{
+    agent {
+        dockerfile {
+            label 'DockerNSSF_Subscription'
+            filename './NF_Dockerfiles/Dockerfile-nssf-subscription'
+            additionalBuildArgs "--tag jenkins/build-cpp"
+            args "-v /opt/cinar/packages:/opt/cinar/packages -v /Source:/Source -v /var/run/docker.sock:/var/run/docker.sock -v /home/jenkins/workspace:/home/jenkins/workspace --user root --name ${devCtrName} --add-host=debrepo.ulakhaberlesme.com.tr:10.10.21.24 --add-host=debrepo-test.ulakhaberlesme.com.tr:192.168.13.47"
+        }
+    }
+
+    parameters {
+        booleanParam(name: 'SKIP_TEST', defaultValue: true, description: 'Whether skips test phase or not')
+        booleanParam(name: 'ENABLE_HELM_INSTALL', defaultValue: false, description: 'Installs the helm package if selected.')
+        booleanParam(name: 'ENABLE_HELM_TEST', defaultValue: false, description: 'Tests the installed helm package if selected.')
+        string(name:'MAKEFILE_DIST_ARGUMENTS', defaultValue:"MAJOR:1,PHASE_NUMBER:0,SPRINT_NUMBER:0,BUILD_NUMBER:${BUILD_NUMBER},DIST_TYPE:\"deb_vnf docker\"", description:"Extra dist arguments")
+        string(name:'MAKEFILE_TEST_ARGUMENTS', defaultValue:"TEST_ARG_1:deneme-1,TEST_ARG_2:deneme-2", description:"Extra test arguments")
+        string(name:'DOCKER_REGISTRY', defaultValue:"registry.ulakhaberlesme.com.tr", description:"Local Docker Registry URL")
+        string(name:'CHART_MUSEUM', defaultValue:"helmchart.ulakhaberlesme.com.tr", description:"Chart Museum URL")
+        string(name:'DEBIAN_REPOSITORY', defaultValue:"debrepo-test.ulakhaberlesme.com.tr", description:"Chart Museum URL")
+        string(name:'HELM_CHART_NAME', defaultValue:"cinar5gc-nssf-subscription", description:"Helm Chart Name")
+
+        string(name:'REPO_CREDENTIALS', defaultValue: "jenkins.service", description:"NSSF Subscription Repository Credentials ID")
+        string(name:'REPO_URL', defaultValue: "http://gitlab.ulakhaberlesme.com.tr/CIN/CINAR_NSSF_Subscription.git", description:"Main Repo URL")
+        string(name:'REPO_BRANCH', defaultValue: "development", description:"Main Repo Branch")
+    }
+
+    environment {
+        REPO_YAML_URL = 'http://gitlab.ulakhaberlesme.com.tr/CIN/YAML.git'
+        REPO_YAML_BRANCH = 'master'
+        REPO_YAML_URL_NSSF = 'http://gitlab.ulakhaberlesme.com.tr/CIN/CINAR_NSSF_YAML.git'
+        REPO_YAML_BRANCH_NSSF = 'master'
+        DEBREPO_CREDENTIALS = credentials('debrepo_credentials')
+    }
+
+    stages{
+        stage("Environment Variables"){
+            steps {
+                sh "printenv"
+            }
+        }
+        stage("Clean Workspace"){
+            steps {
+                cleanWs()
+            }
+        }
+        stage("Pre Configuration"){
+            steps{
+                script {
+                    def splittedArgs = "${MAKEFILE_DIST_ARGUMENTS}".split(",")
+                    for(def i=0;i<splittedArgs.length;i++){
+                        makeDistArgumentsMap[splittedArgs[i].split(":")[0]] = splittedArgs[i].split(":")[1]
+                    }
+                    makeDistArgumentsMap["HELM_CHART_VERSION"] = makeDistArgumentsMap["MAJOR"]+"."+makeDistArgumentsMap["PHASE_NUMBER"]+"."+makeDistArgumentsMap["BUILD_NUMBER"]
+                    def splittedArgsTest = "${MAKEFILE_TEST_ARGUMENTS}".split(",")
+                    for(def i=0;i<splittedArgs.length;i++){
+                        makeTestArgumentsMap[splittedArgs[i].split(":")[0]] = splittedArgs[i].split(":")[1]
+                    }
+                }
+            }
+        }
+        stage('Cloning Repository'){
+            when {
+                expression {
+                    return (env.gitlabActionType == null || env.gitlabActionType == "PUSH")
+                }
+            }
+            steps{
+                script {
+                    updateGitlabCommitStatus name: 'repo clone', state: 'running'
+                    echo "========executing >> Cloning the NSSF SUBSCRIPTION repository stage========"
+                    def branch = env.gitlabBranch == null ? env.REPO_BRANCH : env.gitlabBranch
+                    def gitUrl = env.gitlabSourceRepoHomepage == null ? env.REPO_URL : env.gitlabSourceRepoHomepage
+                    echo ">>> Using URL: ${gitUrl} ..."
+                    echo ">>> Using branch: ${branch} ..."
+                    git url: "${gitUrl}", credentialsId: "${REPO_CREDENTIALS}", branch: "${branch}"
+                }
+            }
+            post{
+                always{
+                    echo "========always for Clone Repository Stage========"
+                }
+                success{
+                    echo "========Clone Repository stage executed successfully========"
+                    updateGitlabCommitStatus name: 'repo clone', state: 'success'
+                }
+                failure{
+                    echo "========Clone Repository stage execution failed========"
+                    updateGitlabCommitStatus name: 'repo clone', state: 'failed'
+                }
+            }
+        }
+        stage("Merge Request Opened"){
+            when {
+                expression {
+                    return (env.gitlabActionType == "MERGE" && gitlabMergeRequestState == "opened")
+                }
+            }
+            steps{
+                updateGitlabCommitStatus name: 'merging', state: 'running'
+                echo "This job is triggered by a Pull Request..."
+                echo "PR Title: ${gitlabMergeRequestTitle}"
+                echo "PR Event Key: ${gitlabActionType}"
+                echo "========executing >> Merging Branch stage========"
+                echo "========Merging ${env.gitlabSourceBranch} branch to ${env.gitlabTargetBranch} branch========"
+                script {
+                    def gitUrl = env.gitlabSourceRepoHomepage == null ? env.REPO_URL : env.gitlabSourceRepoHomepage
+                    git url: "${gitUrl}", credentialsId: "${REPO_CREDENTIALS}", branch: "${env.gitlabTargetBranch}"
+                    try {
+                        sh "git merge origin/${env.gitlabSourceBranch}"
+                    } catch (Exception e) {
+                        currentBuild.result = 'FAILURE'
+                        error("Error occured while merging: " + e.toString())
+                    }
+                }
+            }
+            post{
+                always{
+                    echo "========always for Clone Repository Stage========"
+                }
+                success{
+                    echo "========Clone Repository stage executed successfully========"
+                    updateGitlabCommitStatus name: 'merging', state: 'success'
+                }
+                failure{
+                    echo "========Clone Repository stage execution failed========"
+                    updateGitlabCommitStatus name: 'merging', state: 'failed'
+                }
+            }
+        }
+        stage("Merge Request Accepted"){
+            when {
+                expression {
+                    return (env.gitlabActionType == "MERGE" && gitlabMergeRequestState == "merged")
+                }
+            }
+            steps{
+                updateGitlabCommitStatus name: 'cloning after merge accepted', state: 'running'
+                echo "This job is triggered by a Pull Request..."
+                echo "PR Title: ${gitlabMergeRequestTitle}"
+                echo "PR Event Key: ${gitlabActionType}"
+                echo "========executing >> Merge Request Accepted stage========"
+                echo "========Merge from ${env.gitlabSourceBranch} branch to ${env.gitlabTargetBranch} branch is ACCEPTED========"
+                script {
+                    def gitUrl = env.gitlabSourceRepoHomepage == null ? env.REPO_URL : env.gitlabSourceRepoHomepage
+                    git url: "${gitUrl}", credentialsId: "${REPO_CREDENTIALS}", branch: "${env.gitlabTargetBranch}"
+                }
+            }
+            post{
+                always{
+                    echo "========always for Clone Repository Stage========"
+                }
+                success{
+                    echo "========Clone Repository stage executed successfully========"
+                    updateGitlabCommitStatus name: 'cloning after merge accepted', state: 'success'
+                }
+                failure{
+                    echo "========Clone Repository stage execution failed========"
+                    updateGitlabCommitStatus name: 'cloning after merge accepted', state: 'failed'
+                }
+            }
+        }
+        stage("Clone Yaml Repository"){
+            steps{
+                script {
+                    updateGitlabCommitStatus name: 'cloning yaml repo', state: 'running'
+                    echo "========executing >> Cloning the yaml repository stage========"
+                    dir("CINAR_YAML"){
+                        git url: "${REPO_YAML_URL}", credentialsId: "${REPO_CREDENTIALS}", branch: "${REPO_YAML_BRANCH}"
+                        dir("cinar_nssf_yaml"){
+                            git url: "${REPO_YAML_URL_NSSF}", credentialsId: "${REPO_CREDENTIALS}", branch: "${REPO_YAML_BRANCH_NSSF}"
+                        }
+                    }
+                }
+            }
+            post{
+                always{
+                    echo "========always for Clone YAML Repository Stage========"
+                }
+                success{
+                    echo "========Clone YAML Repository stage executed successfully========"
+                    updateGitlabCommitStatus name: 'cloning yaml repo', state: 'success'
+                }
+                failure{
+                    echo "========Clone YAML Repository stage execution failed========"
+                    updateGitlabCommitStatus name: 'cloning yaml repo', state: 'failed'
+                }
+            }
+        }
+        stage("Build"){
+            steps{
+                script {
+                    updateGitlabCommitStatus name: 'building', state: 'running'
+                    dir("nssf_subscription"){
+                        sh "export CINAR_YAML_DIR=${WORKSPACE}/CINAR_YAML && make all"
+                    }
+                }
+            }
+            post{
+                always{
+                    echo "========always for Build Stage========"
+                }
+                success{
+                    echo "========Build stage executed successfully========"
+                    updateGitlabCommitStatus name: 'building', state: 'success'
+                }
+                failure{
+                    echo "========Build stage execution failed========"
+                    updateGitlabCommitStatus name: 'building', state: 'failed'
+                }
+            }
+        }
+        stage("Test"){
+            steps{
+                script {
+                    dir("nssf_subscription"){
+                        if(params.SKIP_TEST == false){ // Temporary false
+                        // if(params.SKIP_TEST == false || (env.gitlabActionType != null && gitlabMergeRequestState == "opened")){
+                            updateGitlabCommitStatus name: 'testing', state: 'running'
+                            echo "========executing TEST stage with extra arguments========"
+                            def makeTestSh = "make test "
+                            makeTestArgumentsMap.each { k,v ->
+                                makeTestSh += "${k}=${v} "
+                            }
+                            sh makeTestSh
+                        } else {
+                            echo "Skipping test stage..."
+                        }
+                    }
+                }
+            }
+            post{
+                always{
+                    echo "========always for Test Stage========"
+                }
+                success{
+                    echo "========Test stage executed successfully========"
+                    updateGitlabCommitStatus name: 'testing', state: 'success'
+                }
+                failure{
+                    echo "========Test stage execution failed========"
+                    updateGitlabCommitStatus name: 'testing', state: 'failed'
+                }
+            }
+        }
+        stage("Distribution"){
+            when {
+                expression {
+                    return (env.gitlabActionType == null || (env.gitlabActionType == "MERGE" && gitlabMergeRequestState == "merged"))
+                }
+            }
+            steps{
+                script {
+                    dir("nssf_subscription"){
+                        updateGitlabCommitStatus name: 'distributing', state: 'running'
+                        echo "========executing DEBIAN stage========"
+                        def makeDistSh = "make dist "
+                        makeDistArgumentsMap.each { k,v ->
+                            makeDistSh += "${k}=${v} "
+                        }
+                        sh makeDistSh
+                    }
+                }
+            }
+            post{
+                always{
+                    echo "========always for Distribution Stage========"
+                }
+                success{
+                    echo "========Distribution stage executed successfully========"
+                    updateGitlabCommitStatus name: 'distributing', state: 'success'
+                }
+                failure{
+                    echo "========Distribution stage execution failed========"
+                    updateGitlabCommitStatus name: 'distributing', state: 'failed'
+                }
+            }
+        }
+        stage("Helm Install"){
+            steps {
+                echo "========executing Helm Install stage========"
+                script {
+                    if(
+                        (!makeDistArgumentsMap.containsKey('DIST_TYPE')
+                        || (makeDistArgumentsMap['DIST_TYPE'].contains("helm")))
+                        && params.ENABLE_HELM_INSTALL == true
+                    ){
+                        sh "helm install ${HELM_CHART_NAME} /opt/cinar/packages/nssf/subscription/helm/${HELM_CHART_NAME}-${makeDistArgumentsMap['HELM_CHART_VERSION']}.tgz"
+                    } else {
+                        echo "Skipping helm install stage..."
+                    }
+                }
+            }
+            post{
+                always{
+                    echo "========always for Helm Install Stage========"
+                }
+                success{
+                    echo "========Helm Install stage executed successfully========"
+                }
+                failure{
+                    echo "========Helm Install stage execution failed========"
+                }
+            }
+        }
+        stage("Helm Test"){
+            steps {
+                echo "========executing Helm Test stage========"
+                script {
+                    if(
+                        (!makeDistArgumentsMap.containsKey('DIST_TYPE')
+                        || (makeDistArgumentsMap['DIST_TYPE'].contains("helm")))
+                        && params.ENABLE_HELM_INSTALL == true
+                        && params.ENABLE_HELM_TEST == true
+                    ){
+                        sh (
+                            script: "kubectl get deployment --no-headers -o custom-columns=':metadata.name' | grep ${HELM_CHART_NAME}",
+                            returnStdout: true
+                        ).readLines().each { String line ->
+                            sh "kubectl rollout status deployment/${line}"
+                        }
+                        sh "helm test ${HELM_CHART_NAME}"
+                    } else {
+                        echo "Skipping helm Test stage..."
+                    }
+                }
+            }
+            post{
+                always{
+                    echo "========always for Helm Test Stage========"
+                }
+                success{
+                    echo "========Helm Test stage executed successfully========"
+                }
+                failure{
+                    echo "========Helm Test stage execution failed========"
+                }
+            }
+        }
+    }
+    post{
+        always{
+            echo "========always========"
+        }
+        success{
+            echo "========pipeline executed successfully ========"
+        }
+        failure{
+            echo "========pipeline execution failed========"
+        }
+    }
+}
